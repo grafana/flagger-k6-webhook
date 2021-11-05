@@ -4,7 +4,10 @@ Using k6 to do load testing of the canary before rolling out traffic
 
 ## How to deploy
 
-Deploy this as a Service + Deployment beside Flagger. Set the `K6_CLOUD_TOKEN` environment variable if any of your tests will be uploaded to [k6 cloud](https://k6.io/cloud/)
+Deploy this as a Service + Deployment beside Flagger:
+
+- Set the `K6_CLOUD_TOKEN` environment variable if any of your tests will be uploaded to [k6 cloud](https://k6.io/cloud/)
+- Set the `SLACK_TOKEN` environment variable to allow slack updates
 
 ## Example
 
@@ -43,6 +46,7 @@ spec:
             sleep(0.10);
           }
         upload_to_cloud: "true"
+        slack_channels: "channel1,channel2"
       name: k6-load-test
       timeout: 5m
       type: pre-rollout
