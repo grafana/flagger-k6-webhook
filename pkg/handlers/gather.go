@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 )
 
 type gatherPayload struct {
@@ -30,14 +31,16 @@ func newGatherPayload(req *http.Request) (*gatherPayload, error) {
 }
 
 type gatherHandler struct {
-	client *k6.Client
+	client      *k6.Client
+	slackClient *slack.Client
 }
 
 // NewGatherHandler returns an handler that gathers test results
 // This is needed for longer test runs.
-func NewGatherHandler(client *k6.Client) (http.HandlerFunc, error) {
+func NewGatherHandler(client *k6.Client, slackClient *slack.Client) (http.HandlerFunc, error) {
 	handler := &gatherHandler{
-		client: client,
+		client:      client,
+		slackClient: slackClient,
 	}
 
 	return promhttp.InstrumentHandlerCounter(

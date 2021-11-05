@@ -8,14 +8,15 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 )
 
-func Listen(client *k6.Client, port int) error {
-	gatherHandler, err := handlers.NewGatherHandler(client)
+func Listen(client *k6.Client, slackClient *slack.Client, port int) error {
+	gatherHandler, err := handlers.NewGatherHandler(client, slackClient)
 	if err != nil {
 		return err
 	}
-	launchHandler, err := handlers.NewLaunchHandler(client)
+	launchHandler, err := handlers.NewLaunchHandler(client, slackClient)
 	if err != nil {
 		return err
 	}

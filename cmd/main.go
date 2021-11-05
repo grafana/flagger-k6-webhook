@@ -6,6 +6,7 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	log "github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 	"github.com/urfave/cli/v2"
 )
 
@@ -13,6 +14,7 @@ const (
 	flagCloudToken = "cloud-token"
 	flagLogLevel   = "log-level"
 	flagListenPort = "listen-port"
+	flagSlackToken = "slack-token"
 )
 
 func main() {
@@ -42,6 +44,10 @@ func run(args []string) error {
 			EnvVars: []string{"LOG_LEVEL"},
 			Value:   log.InfoLevel.String(),
 		},
+		&cli.StringFlag{
+			Name:    flagSlackToken,
+			EnvVars: []string{"SLACK_TOKEN"},
+		},
 	}
 
 	return app.Run(args)
@@ -59,5 +65,10 @@ func launchServer(c *cli.Context) error {
 		return err
 	}
 
-	return pkg.Listen(client, c.Int(flagListenPort))
+	var slackClient *slack.Client
+	if slackToken := c.String(flagSlackToken); slackToken != "" {
+		slackClient = slack.New(slackToken)
+	}
+
+	return pkg.Listen(client, slackClient, c.Int(flagListenPort))
 }

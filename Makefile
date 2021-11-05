@@ -1,5 +1,5 @@
 .PHONY: dev build push push-latest
-VERSION := $(shell git describe --tags --dirty --always)
+VERSION := $(shell git describe --tags --dirty --always)-10
 IMAGE ?= jduchesnegrafana/flagger-k6-webhook
 
 dev:
