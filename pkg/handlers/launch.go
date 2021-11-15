@@ -46,7 +46,7 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 	}
 
 	if err := payload.validateBaseWebhook(); err != nil {
-		return nil, fmt.Errorf("error while validating base webhook: %v", err)
+		return nil, fmt.Errorf("error while validating base webhook: %w", err)
 	}
 
 	if payload.Metadata.Script == "" {
@@ -56,13 +56,13 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 	if payload.Metadata.UploadToCloudString == "" {
 		payload.Metadata.UploadToCloud = false
 	} else if payload.Metadata.UploadToCloud, err = strconv.ParseBool(payload.Metadata.UploadToCloudString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'upload_to_cloud': %v", err)
+		return nil, fmt.Errorf("error parsing value for 'upload_to_cloud': %w", err)
 	}
 
 	if payload.Metadata.WaitForResultsString == "" {
 		payload.Metadata.WaitForResults = true
 	} else if payload.Metadata.WaitForResults, err = strconv.ParseBool(payload.Metadata.WaitForResultsString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'wait_for_results': %v", err)
+		return nil, fmt.Errorf("error parsing value for 'wait_for_results': %w", err)
 	}
 
 	if payload.Metadata.SlackChannelsString != "" {

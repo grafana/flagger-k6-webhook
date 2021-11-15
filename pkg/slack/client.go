@@ -14,7 +14,6 @@ func NewClient(token string) Client {
 	if token == "" {
 		return nil
 	}
-
 	return &slackClientWrapper{
 		client: slack.New(token),
 	}
@@ -23,34 +22,36 @@ func NewClient(token string) Client {
 func (w *slackClientWrapper) SendMessages(channels []string, text, context string) (map[string]string, error) {
 	slackMessages := map[string]string{}
 	for _, channel := range channels {
-		channelId, ts, _, err := w.client.SendMessage(channel, messageBlocks(text, context))
+		channelID, ts, _, err := w.client.SendMessage(channel, messageBlocks(text, context))
 		if err != nil {
-			return nil, fmt.Errorf("error sending message to %s: %v", channel, err)
+			return nil, fmt.Errorf("error sending message to %s: %w", channel, err)
 		}
-		slackMessages[channelId] = ts
+		slackMessages[channelID] = ts
 	}
+
 	return slackMessages, nil
 }
 
 func (w *slackClientWrapper) UpdateMessages(slackMessages map[string]string, text, context string) error {
-	for channelId, ts := range slackMessages {
-		if _, _, _, err := w.client.UpdateMessage(channelId, ts, messageBlocks(text, context)); err != nil {
-			return fmt.Errorf("error updating message %s in channel %s: %v", ts, channelId, err)
+	for channelID, ts := range slackMessages {
+		if _, _, _, err := w.client.UpdateMessage(channelID, ts, messageBlocks(text, context)); err != nil {
+			return fmt.Errorf("error updating message %s in channel %s: %w", ts, channelID, err)
 		}
 	}
+
 	return nil
 }
 
 func (w *slackClientWrapper) AddFileToThreads(slackMessages map[string]string, fileName, content string) error {
-	for channelId, ts := range slackMessages {
+	for channelID, ts := range slackMessages {
 		fileParams := slack.FileUploadParameters{
 			Title:           fileName,
 			Content:         content,
-			Channels:        []string{channelId},
+			Channels:        []string{channelID},
 			ThreadTimestamp: ts,
 		}
 		if _, err := w.client.UploadFile(fileParams); err != nil {
-			return fmt.Errorf("error while uploading output to %s in slack channel %s: %v", ts, channelId, err)
+			return fmt.Errorf("error while uploading output to %s in slack channel %s: %w", ts, channelID, err)
 		}
 	}
 
@@ -68,5 +69,6 @@ func messageBlocks(text, context string) slack.MsgOption {
 			slack.NewTextBlockObject(slack.MarkdownType, context, false, false),
 		))
 	}
+
 	return slack.MsgOptionBlocks(blocks...)
 }

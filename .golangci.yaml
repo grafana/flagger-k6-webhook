@@ -1,0 +1,17 @@
+run:
+  # include test files or not, default is true
+  tests: false
+linters:
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exportloopref
+    - forbidigo
+    - gci
+    - gofmt
+    - promlinter
+    - revive
