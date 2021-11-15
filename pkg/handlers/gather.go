@@ -2,15 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/grafana/flagger-k6-webhook/pkg/slack"
 	log "github.com/sirupsen/logrus"
-	"github.com/slack-go/slack"
 )
 
 type gatherPayload struct {
@@ -22,37 +20,33 @@ type gatherPayload struct {
 func newGatherPayload(req *http.Request) (*gatherPayload, error) {
 	payload := &gatherPayload{}
 
+	if req.Body == nil {
+		return nil, errors.New("no request body")
+	}
 	defer req.Body.Close()
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
 		return nil, err
+	}
+
+	if err := payload.validateBaseWebhook(); err != nil {
+		return nil, fmt.Errorf("error while validating base webhook: %v", err)
 	}
 
 	return payload, nil
 }
 
 type gatherHandler struct {
-	client      *k6.Client
-	slackClient *slack.Client
+	client      k6.Client
+	slackClient slack.Client
 }
 
 // NewGatherHandler returns an handler that gathers test results
 // This is needed for longer test runs.
-func NewGatherHandler(client *k6.Client, slackClient *slack.Client) (http.HandlerFunc, error) {
-	handler := &gatherHandler{
+func NewGatherHandler(client k6.Client, slackClient slack.Client) (http.Handler, error) {
+	return &gatherHandler{
 		client:      client,
 		slackClient: slackClient,
-	}
-
-	return promhttp.InstrumentHandlerCounter(
-		promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "gather_requests_total",
-				Help: "Total number of /gather-results requests by HTTP code.",
-			},
-			[]string{"code"},
-		),
-		handler,
-	), nil
+	}, nil
 }
 
 func (rh *gatherHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {

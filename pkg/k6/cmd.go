@@ -10,7 +10,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (c *Client) Start(scriptContent string, upload bool, outputWriter io.Writer) (*exec.Cmd, error) {
+type LocalRunnerClient struct {
+	token string
+}
+
+func NewLocalRunnerClient(token string) (Client, error) {
+	client := &LocalRunnerClient{token: token}
+	return client, nil
+}
+
+func (c *LocalRunnerClient) Start(scriptContent string, upload bool, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {
 		return nil, fmt.Errorf("could not create a tempfile for the script: %v", err)
@@ -40,4 +49,10 @@ func (c *Client) Start(scriptContent string, upload bool, outputWriter io.Writer
 
 	log.Infof("launching 'k6 %s'", strings.Join(args, " "))
 	return cmd, cmd.Start()
+}
+
+func (c *LocalRunnerClient) cmd(name string, arg ...string) *exec.Cmd {
+	cmd := exec.Command(name, arg...)
+	cmd.Env = append(os.Environ(), "K6_CLOUD_TOKEN="+c.token)
+	return cmd
 }

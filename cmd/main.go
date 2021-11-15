@@ -5,8 +5,8 @@ import (
 
 	"github.com/grafana/flagger-k6-webhook/pkg"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
+	"github.com/grafana/flagger-k6-webhook/pkg/slack"
 	log "github.com/sirupsen/logrus"
-	"github.com/slack-go/slack"
 	"github.com/urfave/cli/v2"
 )
 
@@ -60,15 +60,11 @@ func launchServer(c *cli.Context) error {
 	}
 	log.SetLevel(logLevel)
 
-	client, err := k6.NewClient(c.String(flagCloudToken))
+	client, err := k6.NewLocalRunnerClient(c.String(flagCloudToken))
 	if err != nil {
 		return err
 	}
-
-	var slackClient *slack.Client
-	if slackToken := c.String(flagSlackToken); slackToken != "" {
-		slackClient = slack.New(slackToken)
-	}
+	slackClient := slack.NewClient(c.String(flagSlackToken))
 
 	return pkg.Listen(client, slackClient, c.Int(flagListenPort))
 }
