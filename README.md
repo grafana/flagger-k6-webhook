@@ -19,11 +19,13 @@ kind: Canary
 ...
 spec:
   analysis:
-    interval: 30s
-    iterations: 2
-    threshold: 2
+    ...
     webhooks:
-    - metadata:
+    - name: k6-load-test
+      timeout: 5m
+      type: pre-rollout
+      url: http://k6-loadtester.flagger/launch-test
+      metadata:
         script: |
           import http from 'k6/http';
           import { sleep } from 'k6';
@@ -47,8 +49,4 @@ spec:
           }
         upload_to_cloud: "true"
         slack_channels: "channel1,channel2"
-      name: k6-load-test
-      timeout: 5m
-      type: pre-rollout
-      url: http://k6-loadtester.flagger/launch-test
 ```
