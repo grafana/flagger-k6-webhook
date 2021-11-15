@@ -14,10 +14,6 @@ import (
 )
 
 func Listen(client k6.Client, slackClient slack.Client, port int) error {
-	gatherHandler, err := handlers.NewGatherHandler(client, slackClient)
-	if err != nil {
-		return err
-	}
 	launchHandler, err := handlers.NewLaunchHandler(client, slackClient)
 	if err != nil {
 		return err
@@ -39,19 +35,6 @@ func Listen(client k6.Client, slackClient slack.Client, port int) error {
 				[]string{"code"},
 			),
 			launchHandler,
-		),
-	)
-
-	http.Handle("/gather-results",
-		promhttp.InstrumentHandlerCounter(
-			promauto.NewCounterVec(
-				prometheus.CounterOpts{
-					Name: "gather_requests_total",
-					Help: "Total number of /gather-results requests by HTTP code.",
-				},
-				[]string{"code"},
-			),
-			gatherHandler,
 		),
 	)
 
