@@ -22,12 +22,23 @@ local goStep(name, commands) = step(name, commands, image='golang:1.17-alpine');
 local dockerStep(name, commands) = step(name, [
   'apk add make',
   'echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin',
-] + commands, image='docker') { environment: { CR_PAT: { from_secret: github_secret.name } } };
+] + commands, image='docker') {
+  environment: {
+    CR_PAT: { from_secret: github_secret.name },
+  },
+  volumes: [
+    {
+      name: 'docker',
+      path: '/var/run/docker.sock',
+    },
+  ],
+};
 
-local trigger(branches, events) = {
-  branch: branches,
-  event: {
-    include: events,
+local trigger(events) = {
+  trigger: {
+    event: {
+      include: events,
+    },
   },
 };
 
@@ -44,13 +55,12 @@ local trigger(branches, events) = {
       step('lint', ['golangci-lint run'], image='golangci/golangci-lint'),
     ],
   }
-  + trigger(['main'], ['pull_request', 'push']),
+  + trigger(['push']),
 
   pipeline('docker') {
     steps: [
       dockerStep('build', ['make build']),
       dockerStep('push tag', ['make push']) { when: {
-        branch: ['main'],
         event: ['tag'],
       } },
       dockerStep('push latest', ['make push-latest']) { when: {
@@ -59,7 +69,7 @@ local trigger(branches, events) = {
       } },
     ],
   }
-  + trigger(['main'], ['pull_request', 'push', 'tag']),
+  + trigger(['push', 'tag']),
 
   github_secret,
 ]
