@@ -1,0 +1,38 @@
+---
+environment:
+  CGO_ENABLED: "0"
+  GOARCH: amd64
+  GOOS: linux
+kind: pipeline
+name: test
+steps:
+- commands:
+  - go build ./...
+  image: golang:1.17-alpine
+  name: build
+- commands:
+  - go test ./...
+  image: golang:1.17-alpine
+  name: test
+- commands:
+  - golangci-lint run
+  image: golangci/golangci-lint
+  name: lint
+trigger:
+  branch:
+  - main
+  event:
+    include:
+    - pull_request
+    - push
+---
+get:
+  name: pat
+  path: infra/data/ci/github/grafanabot
+kind: secret
+name: github_token
+---
+kind: signature
+hmac: 5648fcdbc759da0262d6b17cd37cbadfd8812ed5d4412dbbceca1fbd21951da6
+
+...
