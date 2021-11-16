@@ -31,6 +31,10 @@ kind: pipeline
 name: docker
 steps:
 - commands:
+  - git fetch --tags
+  image: alpine/git
+  name: fetch tags
+- commands:
   - apk add git make
   - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
   - make build
@@ -91,6 +95,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 7e2544f555d34029bbc8a32a5c0c91ff4f48bb5b7208ccbdb1b9132829b3fca7
+hmac: 4b17799d53a83b7dc39f3d0a0a90bd32e0a654a2c619639f515f2e73768cb4fd
 
 ...

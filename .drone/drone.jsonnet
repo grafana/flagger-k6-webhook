@@ -41,6 +41,7 @@ local dockerStep(name, commands) = step(name, [
     },
   ],
 };
+local fetchTagsStep = step('fetch tags', commands=['git fetch --tags'], image='alpine/git');
 
 local trigger(events) = {
   trigger: {
@@ -67,6 +68,7 @@ local trigger(events) = {
 
   pipeline('docker') {
     steps: [
+      fetchTagsStep,
       dockerStep('build', ['make build']),
       dockerStep('push tag', ['make push']) { when: {
         event: ['tag'],
