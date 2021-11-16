@@ -3,7 +3,7 @@ kind: pipeline
 name: test
 steps:
 - commands:
-  - go build
+  - go build ./...
   image: golang:1.17-alpine
   name: build
 - commands:
@@ -29,6 +29,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 2090af1e381f16f32f324763ced6253000a2d2e90844701edb52a8af98720cfb
+hmac: 0ca16f9ae17c9371d0808eb0623ebae41536ef29afc8c48cbc22cfc755cc37de
 
 ...

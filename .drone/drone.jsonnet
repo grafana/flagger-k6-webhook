@@ -18,7 +18,7 @@ local github_secret = secret('github_token', 'infra/data/ci/github/grafanabot', 
     steps: [
       {
         name: 'build',
-        commands: ['go build'],
+        commands: ['go build ./...'],
         image: 'golang:1.17-alpine',
       },
       {
