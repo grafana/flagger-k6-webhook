@@ -1,8 +1,14 @@
 ---
+branch:
+- main
 environment:
   CGO_ENABLED: "0"
   GOARCH: amd64
   GOOS: linux
+event:
+  include:
+  - pull_request
+  - push
 kind: pipeline
 name: test
 steps:
@@ -18,12 +24,53 @@ steps:
   - golangci-lint run
   image: golangci/golangci-lint
   name: lint
-trigger:
-  branch:
-  - main
-  event:
-    include:
-    - pull_request
+---
+branch:
+- main
+event:
+  include:
+  - pull_request
+  - push
+  - tag
+kind: pipeline
+name: docker
+steps:
+- commands:
+  - apk add make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make build
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: build
+- commands:
+  - apk add make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make push
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: push tag
+  when:
+    branch:
+    - main
+    event:
+    - tag
+- commands:
+  - apk add make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make push-latest
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: push latest
+  when:
+    branch:
+    - main
+    event:
     - push
 ---
 get:
@@ -33,6 +80,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 5648fcdbc759da0262d6b17cd37cbadfd8812ed5d4412dbbceca1fbd21951da6
+hmac: ac2e4fa0522c9be0ac9795ec7fce53fd744bc15da4defbbfc4628eb8492c4c1b
 
 ...
