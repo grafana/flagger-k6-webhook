@@ -18,6 +18,6 @@ push-latest: build
 drone:
 	rm -f .drone/drone.yml
 	drone jsonnet --stream --format --source .drone/drone.jsonnet --target .drone/temp.yml
-	drone lint .drone/temp.yml
+	drone lint .drone/temp.yml --trusted
 	drone sign --save grafana/flagger-k6-webhook .drone/temp.yml
 	mv .drone/temp.yml .drone/drone.yml

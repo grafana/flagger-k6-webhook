@@ -1,6 +1,14 @@
 local pipeline(name) = {
   kind: 'pipeline',
   name: name,
+  volumes: [
+    {
+      name: 'docker',
+      host: {
+        path: '/var/run/docker.sock',
+      },
+    },
+  ],
 };
 
 local secret(name, vault_path, vault_key) = {

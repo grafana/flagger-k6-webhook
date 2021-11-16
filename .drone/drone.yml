@@ -22,6 +22,10 @@ trigger:
   event:
     include:
     - push
+volumes:
+- host:
+    path: /var/run/docker.sock
+  name: docker
 ---
 kind: pipeline
 name: docker
@@ -75,6 +79,10 @@ trigger:
     include:
     - push
     - tag
+volumes:
+- host:
+    path: /var/run/docker.sock
+  name: docker
 ---
 get:
   name: pat
@@ -83,6 +91,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 2d38a1c50537a55de5f47e826658a0ebe7a87c0ef5b80fbce94e84b12c659d35
+hmac: cd9c1c75eec36cc921c756e99580dd94a832d566f5aec5e7635280ae626a0dd6
 
 ...
