@@ -28,7 +28,7 @@ local step(name, commands, image) = {
 };
 local goStep(name, commands) = step(name, commands, image='golang:1.17-alpine');
 local dockerStep(name, commands) = step(name, [
-  'apk add make',
+  'apk add git make',
   'echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin',
 ] + commands, image='docker') {
   environment: {

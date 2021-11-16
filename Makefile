@@ -1,5 +1,5 @@
 .PHONY: dev build push push-latest
-VERSION := $(shell git describe --tags --dirty --always)-10
+VERSION := $(shell git describe --tags --dirty --always)
 IMAGE ?= ghcr.io/grafana/flagger-k6-webhook
 
 dev:

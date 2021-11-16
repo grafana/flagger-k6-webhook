@@ -31,7 +31,7 @@ kind: pipeline
 name: docker
 steps:
 - commands:
-  - apk add make
+  - apk add git make
   - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
   - make build
   environment:
@@ -43,7 +43,7 @@ steps:
   - name: docker
     path: /var/run/docker.sock
 - commands:
-  - apk add make
+  - apk add git make
   - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
   - make push
   environment:
@@ -58,7 +58,7 @@ steps:
     event:
     - tag
 - commands:
-  - apk add make
+  - apk add git make
   - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
   - make push-latest
   environment:
@@ -91,6 +91,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: cd9c1c75eec36cc921c756e99580dd94a832d566f5aec5e7635280ae626a0dd6
+hmac: 7e2544f555d34029bbc8a32a5c0c91ff4f48bb5b7208ccbdb1b9132829b3fca7
 
 ...
