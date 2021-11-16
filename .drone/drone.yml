@@ -19,12 +19,70 @@ steps:
   image: golangci/golangci-lint
   name: lint
 trigger:
-  branch:
-  - main
   event:
     include:
-    - pull_request
     - push
+volumes:
+- host:
+    path: /var/run/docker.sock
+  name: docker
+---
+kind: pipeline
+name: docker
+steps:
+- commands:
+  - apk add git make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make build
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: build
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+- commands:
+  - apk add git make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make push
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: push tag
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+  when:
+    event:
+    - tag
+- commands:
+  - apk add git make
+  - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - make push-latest
+  environment:
+    CR_PAT:
+      from_secret: github_token
+  image: docker
+  name: push latest
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+  when:
+    branch:
+    - main
+    event:
+    - push
+trigger:
+  event:
+    include:
+    - push
+    - tag
+volumes:
+- host:
+    path: /var/run/docker.sock
+  name: docker
 ---
 get:
   name: pat
@@ -33,6 +91,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 5648fcdbc759da0262d6b17cd37cbadfd8812ed5d4412dbbceca1fbd21951da6
+hmac: 7e2544f555d34029bbc8a32a5c0c91ff4f48bb5b7208ccbdb1b9132829b3fca7
 
 ...
