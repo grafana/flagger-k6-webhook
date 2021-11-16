@@ -1,0 +1,34 @@
+---
+kind: pipeline
+name: test
+steps:
+- commands:
+  - go build
+  image: golang:1.17-alpine
+  name: build
+- commands:
+  - go test ./...
+  image: golang:1.17-alpine
+  name: test
+- commands:
+  - golangci-lint run
+  image: golangci/golangci-lint
+  name: lint
+trigger:
+  branch:
+  - main
+  event:
+    include:
+    - pull_request
+    - push
+---
+get:
+  name: pat
+  path: infra/data/ci/github/grafanabot
+kind: secret
+name: github_token
+---
+kind: signature
+hmac: 2090af1e381f16f32f324763ced6253000a2d2e90844701edb52a8af98720cfb
+
+...
