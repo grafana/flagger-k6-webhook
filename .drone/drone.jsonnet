@@ -15,6 +15,11 @@ local github_secret = secret('github_token', 'infra/data/ci/github/grafanabot', 
 
 [
   pipeline('test') {
+    environment: {
+      GOARCH: 'amd64',
+      GOOS: 'linux',
+      CGO_ENABLED: '0',
+    },
     steps: [
       {
         name: 'build',

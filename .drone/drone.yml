@@ -1,4 +1,8 @@
 ---
+environment:
+  CGO_ENABLED: "0"
+  GOARCH: amd64
+  GOOS: linux
 kind: pipeline
 name: test
 steps:
@@ -29,6 +33,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 0ca16f9ae17c9371d0808eb0623ebae41536ef29afc8c48cbc22cfc755cc37de
+hmac: 5648fcdbc759da0262d6b17cd37cbadfd8812ed5d4412dbbceca1fbd21951da6
 
 ...
