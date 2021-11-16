@@ -138,7 +138,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	slackClient.EXPECT().SendMessages(
 		[]string{"test", "test2"},
 		":warning: Load testing of `test-name` in namespace `test-space` has started",
-		"Cloud URL: <https://app.k6.io/runs/1157843>",
+		"extra context\nCloud URL: <https://app.k6.io/runs/1157843>",
 	).Return(channelMap, nil)
 
 	// * Wait for the command to finish
@@ -156,12 +156,12 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	slackClient.EXPECT().UpdateMessages(
 		channelMap,
 		":large_green_circle: Load testing of `test-name` in namespace `test-space` has succeeded",
-		"Cloud URL: <https://app.k6.io/runs/1157843>",
+		"extra context\nCloud URL: <https://app.k6.io/runs/1157843>",
 	).Return(nil)
 
 	// Make request
 	request := &http.Request{
-		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "slack_channels": "test,test2"}}`)),
+		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "slack_channels": "test,test2", "notification_context": "extra context"}}`)),
 	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, request)

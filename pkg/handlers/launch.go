@@ -30,6 +30,7 @@ type launchPayload struct {
 		WaitForResults       bool
 		SlackChannelsString  string `json:"slack_channels"`
 		SlackChannels        []string
+		NotificationContext  string `json:"notification_context"`
 	} `json:"metadata"`
 }
 
@@ -103,11 +104,12 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	slackContext := payload.Metadata.NotificationContext
 	// Find the Cloud URL from the k6 output
 	if waitErr := h.waitForOutputPath(&buf); waitErr != nil {
 		logError(req, resp, fmt.Sprintf("error while waiting for test to start: %v", waitErr), 400)
 		text := fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` didn't start successfully", payload.Name, payload.Namespace)
-		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, "")
+		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
 		if err != nil {
 			log.Error(err)
 		}
@@ -117,10 +119,10 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	url, slackContext := "", ""
+	url := ""
 	if payload.Metadata.UploadToCloud {
 		url = outputRegex.FindStringSubmatch(buf.String())[1]
-		slackContext = fmt.Sprintf("Cloud URL: <%s>", url)
+		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
 		log.Infof("cloud run URL: %s", url)
 	}
 
