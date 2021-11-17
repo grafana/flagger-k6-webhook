@@ -49,4 +49,7 @@ spec:
           }
         upload_to_cloud: "true"
         slack_channels: "channel1,channel2"
+        notification_context: "My Cluster: `dev-us-east-1`" # Additional context to be added to the end of messages
+        min_delay: "5m" # Fail all successive runs (keyed to the namespace + name + phase) within the given duration (defaults to 5m)
+        wait_for_results: "true" # Wait until the K6 analysis is completed before returning. This is required to fail/succeed on thresholds (defaults to true)
 ```

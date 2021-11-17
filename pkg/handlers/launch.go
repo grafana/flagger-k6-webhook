@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
@@ -23,14 +24,24 @@ var outputRegex = regexp.MustCompile(`output: cloud \((?P<url>https:\/\/app\.k6\
 type launchPayload struct {
 	flaggerWebhook
 	Metadata struct {
-		Script               string `json:"script"`
-		UploadToCloudString  string `json:"upload_to_cloud"`
-		UploadToCloud        bool
+		Script string `json:"script"`
+
+		// If true, the test results will be uploaded to cloud
+		UploadToCloudString string `json:"upload_to_cloud"`
+		UploadToCloud       bool
+
+		// If true, the handler will wait for the k6 run to be completed
 		WaitForResultsString string `json:"wait_for_results"`
 		WaitForResults       bool
-		SlackChannelsString  string `json:"slack_channels"`
-		SlackChannels        []string
-		NotificationContext  string `json:"notification_context"`
+
+		// Notification settings. Context is added at the end of the message
+		SlackChannelsString string `json:"slack_channels"`
+		SlackChannels       []string
+		NotificationContext string `json:"notification_context"`
+
+		// Min delay between runs. All other runs will fail immediately
+		MinDelay       time.Duration
+		MinDelayString string `json:"min_delay"`
 	} `json:"metadata"`
 }
 
@@ -70,12 +81,21 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 		payload.Metadata.SlackChannels = strings.Split(payload.Metadata.SlackChannelsString, ",")
 	}
 
+	if payload.Metadata.MinDelayString == "" {
+		payload.Metadata.MinDelay = 5 * time.Minute
+	} else if payload.Metadata.MinDelay, err = time.ParseDuration(payload.Metadata.MinDelayString); err != nil {
+		return nil, fmt.Errorf("error parsing value for 'min_delay': %w", err)
+	}
+
 	return payload, nil
 }
 
 type launchHandler struct {
 	client      k6.Client
 	slackClient slack.Client
+
+	lastRunTime      map[string]time.Time
+	lastRunTimeMutex sync.Mutex
 
 	// mockables
 	sleep func(time.Duration)
@@ -86,6 +106,7 @@ func NewLaunchHandler(client k6.Client, slackClient slack.Client) (http.Handler,
 	return &launchHandler{
 		client:      client,
 		slackClient: slackClient,
+		lastRunTime: make(map[string]time.Time),
 		sleep:       time.Sleep,
 	}, nil
 }
@@ -96,6 +117,17 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		logError(req, resp, fmt.Sprintf("error while validating request: %v", err), 400)
 		return
 	}
+
+	runKey := payload.Namespace + "-" + payload.Name + "-" + payload.Phase
+
+	h.lastRunTimeMutex.Lock()
+	if v, ok := h.lastRunTime[runKey]; ok && time.Since(v) < payload.Metadata.MinDelay {
+		logError(req, resp, "not enough time since last run", 400)
+		h.lastRunTimeMutex.Unlock()
+		return
+	}
+	h.lastRunTime[runKey] = time.Now()
+	h.lastRunTimeMutex.Unlock()
 
 	var buf bytes.Buffer
 	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, &buf)
