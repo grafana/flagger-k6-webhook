@@ -39,9 +39,9 @@ type launchPayload struct {
 		SlackChannels       []string
 		NotificationContext string `json:"notification_context"`
 
-		// Min delay between runs. All other runs will fail immediately
-		MinDelay       time.Duration
-		MinDelayString string `json:"min_delay"`
+		// Min delay between failures. All other runs will fail immediately. This prevents retries
+		MinFailureDelay       time.Duration
+		MinFailureDelayString string `json:"min_failure_delay"`
 	} `json:"metadata"`
 }
 
@@ -81,10 +81,10 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 		payload.Metadata.SlackChannels = strings.Split(payload.Metadata.SlackChannelsString, ",")
 	}
 
-	if payload.Metadata.MinDelayString == "" {
-		payload.Metadata.MinDelay = 5 * time.Minute
-	} else if payload.Metadata.MinDelay, err = time.ParseDuration(payload.Metadata.MinDelayString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'min_delay': %w", err)
+	if payload.Metadata.MinFailureDelayString == "" {
+		payload.Metadata.MinFailureDelay = 2 * time.Minute
+	} else if payload.Metadata.MinFailureDelay, err = time.ParseDuration(payload.Metadata.MinFailureDelayString); err != nil {
+		return nil, fmt.Errorf("error parsing value for 'min_failure_delay': %w", err)
 	}
 
 	return payload, nil
@@ -94,8 +94,8 @@ type launchHandler struct {
 	client      k6.Client
 	slackClient slack.Client
 
-	lastRunTime      map[string]time.Time
-	lastRunTimeMutex sync.Mutex
+	lastFailureTime      map[string]time.Time
+	lastFailureTimeMutex sync.Mutex
 
 	// mockables
 	sleep func(time.Duration)
@@ -104,10 +104,10 @@ type launchHandler struct {
 // NewLaunchHandler returns an handler that launches a k6 load test
 func NewLaunchHandler(client k6.Client, slackClient slack.Client) (http.Handler, error) {
 	return &launchHandler{
-		client:      client,
-		slackClient: slackClient,
-		lastRunTime: make(map[string]time.Time),
-		sleep:       time.Sleep,
+		client:          client,
+		slackClient:     slackClient,
+		lastFailureTime: make(map[string]time.Time),
+		sleep:           time.Sleep,
 	}, nil
 }
 
@@ -119,27 +119,32 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	runKey := payload.Namespace + "-" + payload.Name + "-" + payload.Phase
+	fail := func(message string) {
+		h.lastFailureTimeMutex.Lock()
+		h.lastFailureTime[runKey] = time.Now()
+		h.lastFailureTimeMutex.Unlock()
+		logError(req, resp, message, 400)
+	}
 
-	h.lastRunTimeMutex.Lock()
-	if v, ok := h.lastRunTime[runKey]; ok && time.Since(v) < payload.Metadata.MinDelay {
-		logError(req, resp, "not enough time since last run", 400)
-		h.lastRunTimeMutex.Unlock()
+	h.lastFailureTimeMutex.Lock()
+	v, ok := h.lastFailureTime[runKey]
+	h.lastFailureTimeMutex.Unlock()
+	if ok && time.Since(v) < payload.Metadata.MinFailureDelay {
+		fail("not enough time since last failure")
 		return
 	}
-	h.lastRunTime[runKey] = time.Now()
-	h.lastRunTimeMutex.Unlock()
 
 	var buf bytes.Buffer
 	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, &buf)
 	if err != nil {
-		logError(req, resp, fmt.Sprintf("error while launching the test: %v", err), 400)
+		fail(fmt.Sprintf("error while launching the test: %v", err))
 		return
 	}
 
 	slackContext := payload.Metadata.NotificationContext
 	// Find the Cloud URL from the k6 output
 	if waitErr := h.waitForOutputPath(&buf); waitErr != nil {
-		logError(req, resp, fmt.Sprintf("error while waiting for test to start: %v", waitErr), 400)
+		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
 		text := fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` didn't start successfully", payload.Name, payload.Namespace)
 		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
 		if err != nil {
@@ -183,7 +188,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 			log.Error(err)
 		}
 
-		logError(req, resp, fmt.Sprintf("failed to run: %v", cmdErr), 400)
+		fail(fmt.Sprintf("failed to run: %v", cmdErr))
 		return
 	}
 

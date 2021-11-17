@@ -62,14 +62,14 @@ func TestNewLaunchPayload(t *testing.T) {
 				p.Metadata.UploadToCloud = false
 				p.Metadata.WaitForResults = true
 				p.Metadata.SlackChannels = nil
-				p.Metadata.MinDelay = 5 * time.Minute
+				p.Metadata.MinFailureDelay = 2 * time.Minute
 				return p
 			}(),
 		},
 		{
 			name: "set values",
 			request: &http.Request{
-				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "wait_for_results": "false", "slack_channels": "test,test2", "min_delay": "3m"}}`)),
+				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "wait_for_results": "false", "slack_channels": "test,test2", "min_failure_delay": "3m"}}`)),
 			},
 			want: func() *launchPayload {
 				p := &launchPayload{flaggerWebhook: flaggerWebhook{Name: "test", Namespace: "test", Phase: "pre-rollout"}}
@@ -80,8 +80,8 @@ func TestNewLaunchPayload(t *testing.T) {
 				p.Metadata.WaitForResults = false
 				p.Metadata.SlackChannelsString = "test,test2"
 				p.Metadata.SlackChannels = []string{"test", "test2"}
-				p.Metadata.MinDelay = 3 * time.Minute
-				p.Metadata.MinDelayString = "3m"
+				p.Metadata.MinFailureDelay = 3 * time.Minute
+				p.Metadata.MinFailureDelayString = "3m"
 				return p
 			}(),
 		},
@@ -100,11 +100,11 @@ func TestNewLaunchPayload(t *testing.T) {
 			wantErr: errors.New(`error parsing value for 'wait_for_results': strconv.ParseBool: parsing "bad": invalid syntax`),
 		},
 		{
-			name: "invalid min_delay",
+			name: "invalid min_failure_delay",
 			request: &http.Request{
-				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "min_delay": "bad"}}`)),
+				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "min_failure_delay": "bad"}}`)),
 			},
-			wantErr: errors.New(`error parsing value for 'min_delay': time: invalid duration "bad"`),
+			wantErr: errors.New(`error parsing value for 'min_failure_delay': time: invalid duration "bad"`),
 		},
 	}
 
@@ -197,7 +197,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 	resultParts := strings.SplitN(string(fullResults), "running", 2)
 	var bufferWriter io.Writer
 	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", false, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start("my-script", false, gomock.Any()).Times(2).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -209,10 +209,10 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 		[]string{"test", "test2"},
 		":warning: Load testing of `test-name` in namespace `test-space` has started",
 		"",
-	).Return(channelMap, nil)
+	).Times(2).Return(channelMap, nil)
 
 	// * Wait for the command to finish
-	testRun.EXPECT().Wait().DoAndReturn(func() error {
+	testRun.EXPECT().Wait().Times(2).DoAndReturn(func() error {
 		bufferWriter.Write([]byte("running" + resultParts[1]))
 		return nil
 	})
@@ -222,18 +222,33 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 		channelMap,
 		"k6-results.txt",
 		string(fullResults),
-	).Return(nil)
+	).Times(2).Return(nil)
 	slackClient.EXPECT().UpdateMessages(
 		channelMap,
 		":large_green_circle: Load testing of `test-name` in namespace `test-space` has succeeded",
 		"",
-	).Return(nil)
+	).Times(2).Return(nil)
 
 	// Make request
 	request := &http.Request{
 		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "false", "slack_channels": "test,test2"}}`)),
 	}
 	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, request)
+
+	// Expected response
+	assert.Equal(t, "", rr.Body.String())
+	assert.Equal(t, 200, rr.Result().StatusCode)
+
+	//
+	// Run it again immediately to see if we get the same result
+	//
+
+	// Make request
+	request = &http.Request{
+		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "false", "slack_channels": "test,test2"}}`)),
+	}
+	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
@@ -301,7 +316,7 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 	assert.Equal(t, 400, rr.Result().StatusCode)
 
 	//
-	// Run it again immediately to get the failure due to min_delay
+	// Run it again immediately to get the failure due to min_failure_delay
 	//
 
 	// Make request
@@ -312,7 +327,7 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "not enough time since last run\n", rr.Body.String())
+	assert.Equal(t, "not enough time since last failure\n", rr.Body.String())
 	assert.Equal(t, 400, rr.Result().StatusCode)
 }
 
