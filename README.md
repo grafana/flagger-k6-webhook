@@ -2,6 +2,10 @@
 
 Using k6 to do load testing of the canary before rolling out traffic
 
+Here's a demo (sped up):
+
+![Demo](demo.gif)
+
 ## How to deploy
 
 Deploy this as a Service + Deployment beside Flagger:
