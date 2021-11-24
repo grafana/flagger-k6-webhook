@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,7 +27,15 @@ func (w *flaggerWebhook) validateBaseWebhook() error {
 	return nil
 }
 
-func logError(req *http.Request, resp http.ResponseWriter, err string, code int) {
-	log.WithField("from", req.RemoteAddr).WithField("command", req.RequestURI).Error(err)
+func createLogEntry(req *http.Request) *log.Entry {
+	return log.WithFields(log.Fields{
+		"requestID": uuid.NewString(),
+		"command":   req.RequestURI,
+		"ip":        req.RemoteAddr,
+	})
+}
+
+func logError(cmdLog *log.Entry, req *http.Request, resp http.ResponseWriter, err string, code int) {
+	cmdLog.Error(err)
 	http.Error(resp, err, code)
 }

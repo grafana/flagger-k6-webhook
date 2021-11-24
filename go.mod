@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/golang/mock v1.6.0
+	github.com/google/uuid v1.3.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.10.0

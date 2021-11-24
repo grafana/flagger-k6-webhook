@@ -36,19 +36,10 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, outputWrite
 	args = append(args, tempFile.Name())
 
 	cmd := c.cmd("k6", args...)
-	if log.GetLevel() == log.DebugLevel {
-		fmt.Fprintln(os.Stderr, string(scriptContent))
-	}
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
 
-	if log.GetLevel() == log.DebugLevel {
-		cmd.Stdout = io.MultiWriter(os.Stdout, outputWriter)
-		cmd.Stderr = io.MultiWriter(os.Stderr, outputWriter)
-	} else {
-		cmd.Stdout = outputWriter
-		cmd.Stderr = outputWriter
-	}
-
-	log.Infof("launching 'k6 %s'", strings.Join(args, " "))
+	log.Debugf("launching 'k6 %s'", strings.Join(args, " "))
 	return cmd, cmd.Start()
 }
 

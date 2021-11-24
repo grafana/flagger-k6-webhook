@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -112,18 +111,23 @@ func NewLaunchHandler(client k6.Client, slackClient slack.Client) (http.Handler,
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	cmdLog := createLogEntry(req)
+
+	cmdLog.Info("parsing the request payload")
 	payload, err := newLaunchPayload(req)
 	if err != nil {
-		logError(req, resp, fmt.Sprintf("error while validating request: %v", err), 400)
+		logError(cmdLog, req, resp, fmt.Sprintf("error while validating request: %v", err), 400)
 		return
 	}
 
+	// define the fail function
+	// this function returns a 400 status and saves the failure time (to avoid retries, if the user has configured to do so)
 	runKey := payload.Namespace + "-" + payload.Name + "-" + payload.Phase
 	fail := func(message string) {
 		h.lastFailureTimeMutex.Lock()
 		h.lastFailureTime[runKey] = time.Now()
 		h.lastFailureTimeMutex.Unlock()
-		logError(req, resp, message, 400)
+		logError(cmdLog, req, resp, message, 400)
 	}
 
 	h.lastFailureTimeMutex.Lock()
@@ -134,6 +138,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	cmdLog.Info("launching k6 test")
 	var buf bytes.Buffer
 	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, &buf)
 	if err != nil {
@@ -141,18 +146,19 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	cmdLog.Info("waiting for output path")
 	slackContext := payload.Metadata.NotificationContext
 	// Find the Cloud URL from the k6 output
-	if waitErr := h.waitForOutputPath(&buf); waitErr != nil {
-		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
+	if waitErr := h.waitForOutputPath(cmdLog, &buf); waitErr != nil {
 		text := fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` didn't start successfully", payload.Name, payload.Namespace)
 		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
 		if err != nil {
-			log.Error(err)
+			cmdLog.Error(err)
 		}
 		if err := h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()); err != nil {
-			log.Error(err)
+			cmdLog.Error(err)
 		}
+		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
 		return
 	}
 
@@ -160,32 +166,32 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if payload.Metadata.UploadToCloud {
 		url = outputRegex.FindStringSubmatch(buf.String())[1]
 		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
-		log.Infof("cloud run URL: %s", url)
+		cmdLog.Infof("cloud run URL: %s", url)
 	}
 
 	// Write the initial message to each channel
 	text := fmt.Sprintf(":warning: Load testing of `%s` in namespace `%s` has started", payload.Name, payload.Namespace)
 	slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
 	if err != nil {
-		log.Error(err)
+		cmdLog.Error(err)
 	}
 
 	if !payload.Metadata.WaitForResults {
-		log.WithField("command", req.RequestURI).Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
+		cmdLog.Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
 		return
 	}
 
 	// Wait for the test to finish and write the output to slack
+	cmdLog.Info("waiting for the results")
 	cmdErr := cmd.Wait()
 	if err := h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()); err != nil {
-		log.Error(err)
+		cmdLog.Error(err)
 	}
 
 	// Load testing failed, log the output
 	if cmdErr != nil {
-		fmt.Fprint(os.Stderr, buf.String())
 		if err := h.slackClient.UpdateMessages(slackMessages, fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` has failed", payload.Name, payload.Namespace), slackContext); err != nil {
-			log.Error(err)
+			cmdLog.Error(err)
 		}
 
 		fail(fmt.Sprintf("failed to run: %v", cmdErr))
@@ -194,17 +200,17 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	// Success!
 	if err := h.slackClient.UpdateMessages(slackMessages, fmt.Sprintf(":large_green_circle: Load testing of `%s` in namespace `%s` has succeeded", payload.Name, payload.Namespace), slackContext); err != nil {
-		log.Error(err)
+		cmdLog.Error(err)
 	}
-	log.WithField("command", req.RequestURI).Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
+	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
 }
 
-func (h *launchHandler) waitForOutputPath(buf *bytes.Buffer) error {
+func (h *launchHandler) waitForOutputPath(cmdLog *log.Entry, buf *bytes.Buffer) error {
 	for i := 0; i < 10; i++ {
 		if strings.Contains(buf.String(), "output:") {
 			return nil
 		}
-		log.Debug("waiting 2 seconds for test to start")
+		cmdLog.Debug("waiting 2 seconds for test to start")
 		h.sleep(2 * time.Second)
 	}
 	return errors.New("timeout")
