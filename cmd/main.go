@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	defaultPort = 80
+
 	flagCloudToken = "cloud-token"
 	flagLogLevel   = "log-level"
 	flagListenPort = "listen-port"
@@ -37,7 +39,7 @@ func run(args []string) error {
 		&cli.IntFlag{
 			Name:    flagListenPort,
 			EnvVars: []string{"LISTEN_PORT"},
-			Value:   80,
+			Value:   defaultPort,
 		},
 		&cli.StringFlag{
 			Name:    flagLogLevel,
