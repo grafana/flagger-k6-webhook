@@ -12,6 +12,17 @@ linters:
     - exportloopref
     - forbidigo
     - gci
+    - goconst
+    - gocyclo
+    - godot
     - gofmt
+    - goimports
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
     - promlinter
     - revive
+linters-settings:
+  gocyclo:
+    min-complexity: 15
