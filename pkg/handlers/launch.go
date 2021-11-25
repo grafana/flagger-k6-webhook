@@ -17,6 +17,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	emojiSuccess = ":large_green_circle:"
+	emojiWarning = ":warning:"
+	emojiFailure = ":red_circle:"
+)
+
 // https://regex101.com/r/Pn7VUB/1
 var outputRegex = regexp.MustCompile(`output: cloud \((?P<url>https:\/\/app\.k6\.io\/runs\/\d+)\)`)
 
@@ -42,6 +48,14 @@ type launchPayload struct {
 		MinFailureDelay       time.Duration
 		MinFailureDelayString string `json:"min_failure_delay"`
 	} `json:"metadata"`
+}
+
+func (p *launchPayload) statusMessage(emoji, status string) string {
+	return fmt.Sprintf("%s Load testing of `%s` in namespace `%s` %s", emoji, p.Name, p.Namespace, status)
+}
+
+func (p *launchPayload) key() string {
+	return fmt.Sprintf("%s-%s-%s", p.Namespace, p.Name, p.Phase)
 }
 
 func newLaunchPayload(req *http.Request) (*launchPayload, error) {
@@ -110,17 +124,17 @@ func NewLaunchHandler(client k6.Client, slackClient slack.Client) (http.Handler,
 	}, nil
 }
 
-func (h *launchHandler) getLastFailureTime(runKey string) (time.Time, bool) {
+func (h *launchHandler) getLastFailureTime(payload *launchPayload) (time.Time, bool) {
 	h.lastFailureTimeMutex.Lock()
 	defer h.lastFailureTimeMutex.Unlock()
-	v, ok := h.lastFailureTime[runKey]
+	v, ok := h.lastFailureTime[payload.key()]
 	return v, ok
 }
 
-func (h *launchHandler) setLastFailureTime(runKey string) {
+func (h *launchHandler) setLastFailureTime(payload *launchPayload) {
 	h.lastFailureTimeMutex.Lock()
 	defer h.lastFailureTimeMutex.Unlock()
-	h.lastFailureTime[runKey] = time.Now()
+	h.lastFailureTime[payload.key()] = time.Now()
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -142,9 +156,8 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	// define the fail function
 	// this function returns a 400 status and saves the failure time (to avoid retries, if the user has configured to do so)
 	var buf bytes.Buffer
-	runKey := payload.Namespace + "-" + payload.Name + "-" + payload.Phase
 	fail := func(message string) {
-		h.setLastFailureTime(runKey)
+		h.setLastFailureTime(payload)
 		cmdLog.Error(message)
 		if buf.Len() > 0 {
 			message += "\n" + buf.String()
@@ -152,7 +165,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		http.Error(resp, message, 400)
 	}
 
-	if v, ok := h.getLastFailureTime(runKey); ok && time.Since(v) < payload.Metadata.MinFailureDelay {
+	if v, ok := h.getLastFailureTime(payload); ok && time.Since(v) < payload.Metadata.MinFailureDelay {
 		fail("not enough time since last failure")
 		return
 	}
@@ -168,8 +181,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	slackContext := payload.Metadata.NotificationContext
 	// Find the Cloud URL from the k6 output
 	if waitErr := h.waitForOutputPath(cmdLog, &buf); waitErr != nil {
-		text := fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` didn't start successfully", payload.Name, payload.Namespace)
-		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
+		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiFailure, "didn't start successfully"), slackContext)
 		logError(err)
 		logError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
@@ -177,19 +189,17 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	if payload.Metadata.UploadToCloud {
-		matches := outputRegex.FindStringSubmatch(buf.String())
-		if len(matches) < 2 {
-			fail("couldn't find the cloud URL in the output")
+		url, err := getCloudURL(buf.String())
+		if err != nil {
+			fail(err.Error())
 			return
 		}
-		url := matches[1]
 		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
 		cmdLog.Infof("cloud run URL: %s", url)
 	}
 
 	// Write the initial message to each channel
-	text := fmt.Sprintf(":warning: Load testing of `%s` in namespace `%s` has started", payload.Name, payload.Namespace)
-	slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, text, slackContext)
+	slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiWarning, "has started"), slackContext)
 	logError(err)
 
 	if !payload.Metadata.WaitForResults {
@@ -204,13 +214,13 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	// Load testing failed, log the output
 	if err != nil {
-		logError(h.slackClient.UpdateMessages(slackMessages, fmt.Sprintf(":red_circle: Load testing of `%s` in namespace `%s` has failed", payload.Name, payload.Namespace), slackContext))
+		logError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiFailure, "has failed"), slackContext))
 		fail(fmt.Sprintf("failed to run: %v", err))
 		return
 	}
 
 	// Success!
-	logError(h.slackClient.UpdateMessages(slackMessages, fmt.Sprintf(":large_green_circle: Load testing of `%s` in namespace `%s` has succeeded", payload.Name, payload.Namespace), slackContext))
+	logError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiSuccess, "has succeeded"), slackContext))
 	_, err = resp.Write(buf.Bytes())
 	logError(err)
 	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
@@ -225,4 +235,12 @@ func (h *launchHandler) waitForOutputPath(cmdLog *log.Entry, buf *bytes.Buffer) 
 		h.sleep(2 * time.Second)
 	}
 	return errors.New("timeout")
+}
+
+func getCloudURL(output string) (string, error) {
+	matches := outputRegex.FindStringSubmatch(output)
+	if len(matches) < 2 {
+		return "", errors.New("couldn't find the cloud URL in the output")
+	}
+	return matches[1], nil
 }
