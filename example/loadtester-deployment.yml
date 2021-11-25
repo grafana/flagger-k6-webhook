@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k6-loadtester
+  namespace: flagger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: k6-loadtester
+  template:
+    metadata:
+      labels:
+        name: k6-loadtester
+    spec:
+      containers:
+      - env:
+        - name: K6_CLOUD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: k6-loadtester
+        - name: SLACK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: slack_token
+              name: k6-loadtester
+        - name: LOG_LEVEL
+          value: debug
+        image: ghcr.io/grafana/flagger-k6-webhook:v0.0.4
+        name: k6-loadtester
+        ports:
+        - containerPort: 80
+          name: http-metrics
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80

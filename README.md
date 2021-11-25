@@ -1,21 +1,16 @@
 # flagger-k6-webhook
 
-Using k6 to do load testing of the canary before rolling out traffic
+Using [k6](https://k6.io/) to do load testing of the canary before rolling out traffic
 
 Here's a demo (sped up):
 
 ![Demo](demo.gif)
 
-## How to deploy
-
-Deploy this as a Service + Deployment beside Flagger:
-
-- Set the `K6_CLOUD_TOKEN` environment variable if any of your tests will be uploaded to [k6 cloud](https://k6.io/cloud/)
-- Set the `SLACK_TOKEN` environment variable to allow slack updates
-
-## Example
+## Configuration
 
 Here's what the `Canary` webhook can look like. This is `pre-rollout` webhook, so it happens before any traffic is placed on the canary. If the webhook passes the thresholds, the rest of the Flagger analysis and promotion process occurs
+
+See the [k6 docs](https://k6.io/docs) for a full description of options available in scripts
 
 ```yaml
 apiVersion: flagger.app/v1beta1
@@ -57,3 +52,16 @@ spec:
         min_failure_delay: "2m" # Fail all successive runs after a failure (keyed to the namespace + name + phase) within the given duration (defaults to 2m). This prevents reruns. Set this to a duration slightly above the testing interval
         wait_for_results: "true" # Wait until the K6 analysis is completed before returning. This is required to fail/succeed on thresholds (defaults to true)
 ```
+
+### Injecting secrets and configuration
+
+Use the [k6 environment variables feature](https://k6.io/docs/using-k6/environment-variables/) to inject configurations and secrets to your script. To do so, mount your configs as environment variables onto the load tester and reference them with `${__ENV.<VAR_NAME>}`
+
+## How to deploy
+
+Deploy this as a Service + Deployment beside Flagger:
+
+- Set the `K6_CLOUD_TOKEN` environment variable if any of your tests will be uploaded to [k6 cloud](https://k6.io/cloud/)
+- Set the `SLACK_TOKEN` environment variable to allow slack updates
+
+See [the example directory](./example) for a full example on how the loadtester can be deployed along with a Canary referencing it

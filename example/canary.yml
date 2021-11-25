@@ -1,0 +1,58 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: my-app
+  namespace: my-namespace
+spec:
+  analysis:
+    alerts:
+    - name: slack
+      providerRef:
+        name: slack-flagger-test
+        namespace: flagger
+      severity: info
+    interval: 1m
+    iterations: 1
+    threshold: 2
+    webhooks:
+    - metadata:
+        notification_context: 'Cluster: `dev-cluster`'
+        script: |
+          import http from 'k6/http';
+          import { sleep } from 'k6';
+          export const options = {
+            vus: 2,
+            duration: '30s',
+            thresholds: {
+              http_req_duration: ['p(95)<50']
+            },
+            ext: {
+              loadimpact: {
+                name: 'dev-cluster/my-namespace/my-app',
+                projectID: ${__ENV.PROJECT_ID},
+              },
+            },
+          };
+          export default function () {
+            http.get('http://my-app-canary.my-namespace:80/');
+            sleep(0.10);
+          }
+        slack_channels: flagger-test
+        upload_to_cloud: "true"
+      name: k6-load-test
+      timeout: 5m
+      type: pre-rollout
+      url: http://k6-loadtester.flagger/launch-test
+  autoscalerRef:
+    apiVersion: autoscaling/v2beta2
+    kind: HorizontalPodAutoscaler
+    name: my-app
+  service:
+    name: my-app
+    port: 80
+    portDiscovery: true
+    targetPort: 80
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
