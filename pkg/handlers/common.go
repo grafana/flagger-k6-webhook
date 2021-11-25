@@ -34,8 +34,3 @@ func createLogEntry(req *http.Request) *log.Entry {
 		"ip":        req.RemoteAddr,
 	})
 }
-
-func logError(cmdLog *log.Entry, req *http.Request, resp http.ResponseWriter, err string, code int) {
-	cmdLog.Error(err)
-	http.Error(resp, err, code)
-}

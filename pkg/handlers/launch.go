@@ -116,18 +116,24 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	cmdLog.Info("parsing the request payload")
 	payload, err := newLaunchPayload(req)
 	if err != nil {
-		logError(cmdLog, req, resp, fmt.Sprintf("error while validating request: %v", err), 400)
+		cmdLog.Error(err)
+		http.Error(resp, fmt.Sprintf("error while validating request: %v", err), 400)
 		return
 	}
 
 	// define the fail function
 	// this function returns a 400 status and saves the failure time (to avoid retries, if the user has configured to do so)
+	var buf bytes.Buffer
 	runKey := payload.Namespace + "-" + payload.Name + "-" + payload.Phase
 	fail := func(message string) {
 		h.lastFailureTimeMutex.Lock()
 		h.lastFailureTime[runKey] = time.Now()
 		h.lastFailureTimeMutex.Unlock()
-		logError(cmdLog, req, resp, message, 400)
+		cmdLog.Error(message)
+		if buf.Len() > 0 {
+			message += "\n" + buf.String()
+		}
+		http.Error(resp, message, 400)
 	}
 
 	h.lastFailureTimeMutex.Lock()
@@ -139,7 +145,6 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	cmdLog.Info("launching k6 test")
-	var buf bytes.Buffer
 	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
@@ -164,7 +169,12 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	url := ""
 	if payload.Metadata.UploadToCloud {
-		url = outputRegex.FindStringSubmatch(buf.String())[1]
+		matches := outputRegex.FindStringSubmatch(buf.String())
+		if len(matches) < 2 {
+			fail("couldn't find the cloud URL in the output")
+			return
+		}
+		url = matches[1]
 		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
 		cmdLog.Infof("cloud run URL: %s", url)
 	}
@@ -200,6 +210,9 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	// Success!
 	if err := h.slackClient.UpdateMessages(slackMessages, fmt.Sprintf(":large_green_circle: Load testing of `%s` in namespace `%s` has succeeded", payload.Name, payload.Namespace), slackContext); err != nil {
+		cmdLog.Error(err)
+	}
+	if _, err := resp.Write(buf.Bytes()); err != nil {
 		cmdLog.Error(err)
 	}
 	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)

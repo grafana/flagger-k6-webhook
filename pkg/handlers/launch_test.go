@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -177,7 +178,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "", rr.Body.String())
+	assert.Equal(t, fullResults, rr.Body.Bytes())
 	assert.Equal(t, 200, rr.Result().StatusCode)
 }
 
@@ -237,7 +238,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "", rr.Body.String())
+	assert.Equal(t, fullResults, rr.Body.Bytes())
 	assert.Equal(t, 200, rr.Result().StatusCode)
 
 	//
@@ -252,7 +253,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "", rr.Body.String())
+	assert.Equal(t, fullResults, rr.Body.Bytes())
 	assert.Equal(t, 200, rr.Result().StatusCode)
 }
 
@@ -312,7 +313,7 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "failed to run: exit code 1\n", rr.Body.String())
+	assert.Equal(t, fmt.Sprintf("failed to run: exit code 1\n%s\n", string(fullResults)), rr.Body.String())
 	assert.Equal(t, 400, rr.Result().StatusCode)
 
 	//
@@ -375,7 +376,7 @@ func TestLaunchNeverStarted(t *testing.T) {
 	handler.ServeHTTP(rr, request)
 
 	// Expected response
-	assert.Equal(t, "error while waiting for test to start: timeout\n", rr.Body.String())
+	assert.Equal(t, "error while waiting for test to start: timeout\nfailed to run (k6 error)\n", rr.Body.String())
 	assert.Equal(t, 400, rr.Result().StatusCode)
 	// 10 sleep calls
 	assert.Equal(t, sleepCalls, []time.Duration{2 * time.Second, 2 * time.Second, 2 * time.Second, 2 * time.Second, 2 * time.Second,
