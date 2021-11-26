@@ -51,9 +51,9 @@ type launchPayload struct {
 		MinFailureDelay       time.Duration
 		MinFailureDelayString string `json:"min_failure_delay"`
 
-		// Mount secrets to environment (map of `<ENV>` -> `<namespace (default: payload namespace)>/<secret name>/<secret key>`)
-		MountKubernetesSecrets       map[string]string
-		MountKubernetesSecretsString string `json:"mount_kubernetes_secrets"`
+		// Inject secrets to environment (map of `<ENV>` -> `<namespace (default: payload namespace)>/<secret name>/<secret key>`)
+		KubernetesSecrets       map[string]string
+		KubernetesSecretsString string `json:"kubernetes_secrets"`
 	} `json:"metadata"`
 }
 
@@ -107,9 +107,9 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 		return nil, fmt.Errorf("error parsing value for 'min_failure_delay': %w", err)
 	}
 
-	if payload.Metadata.MountKubernetesSecretsString != "" {
-		if err := json.Unmarshal([]byte(payload.Metadata.MountKubernetesSecretsString), &payload.Metadata.MountKubernetesSecrets); err != nil {
-			return nil, fmt.Errorf("error parsing value for 'mount_kubernetes_secrets': %w", err)
+	if payload.Metadata.KubernetesSecretsString != "" {
+		if err := json.Unmarshal([]byte(payload.Metadata.KubernetesSecretsString), &payload.Metadata.KubernetesSecrets); err != nil {
+			return nil, fmt.Errorf("error parsing value for 'kubernetes_secrets': %w", err)
 		}
 	}
 
@@ -153,7 +153,7 @@ func (h *launchHandler) setLastFailureTime(payload *launchPayload) {
 }
 
 func (h *launchHandler) fetchSecrets(payload *launchPayload) (map[string]string, error) {
-	if len(payload.Metadata.MountKubernetesSecrets) == 0 {
+	if len(payload.Metadata.KubernetesSecrets) == 0 {
 		return nil, nil
 	}
 
@@ -162,7 +162,7 @@ func (h *launchHandler) fetchSecrets(payload *launchPayload) (map[string]string,
 	}
 
 	secrets := make(map[string]string)
-	for env, secret := range payload.Metadata.MountKubernetesSecrets {
+	for env, secret := range payload.Metadata.KubernetesSecrets {
 		parts := strings.SplitN(secret, "/", 3)
 		namespace := payload.Namespace
 		if len(parts) > 2 {
