@@ -7,7 +7,7 @@ import (
 )
 
 type Client interface {
-	Start(scriptContent string, upload bool, outputWriter io.Writer) (TestRun, error)
+	Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error)
 }
 
 type TestRun interface {

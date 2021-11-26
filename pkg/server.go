@@ -11,10 +11,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 )
 
-func Listen(client k6.Client, slackClient slack.Client, port int) error {
-	launchHandler, err := handlers.NewLaunchHandler(client, slackClient)
+func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, port int) error {
+	launchHandler, err := handlers.NewLaunchHandler(client, kubeClient, slackClient)
 	if err != nil {
 		return err
 	}

@@ -36,18 +36,18 @@ func (m *MockK6Client) EXPECT() *MockK6ClientMockRecorder {
 }
 
 // Start mocks base method.
-func (m *MockK6Client) Start(arg0 string, arg1 bool, arg2 io.Writer) (k6.TestRun, error) {
+func (m *MockK6Client) Start(arg0 string, arg1 bool, arg2 map[string]string, arg3 io.Writer) (k6.TestRun, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Start", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(k6.TestRun)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockK6ClientMockRecorder) Start(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockK6ClientMockRecorder) Start(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockK6Client)(nil).Start), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockK6Client)(nil).Start), arg0, arg1, arg2, arg3)
 }
 
 // MockK6TestRun is a mock of TestRun interface.

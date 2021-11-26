@@ -17,6 +17,10 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNewLaunchPayload(t *testing.T) {
@@ -70,7 +74,19 @@ func TestNewLaunchPayload(t *testing.T) {
 		{
 			name: "set values",
 			request: &http.Request{
-				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "wait_for_results": "false", "slack_channels": "test,test2", "min_failure_delay": "3m"}}`)),
+				Body: ioutil.NopCloser(strings.NewReader(`{
+					"name": "test", 
+					"namespace": "test", 
+					"phase": "pre-rollout", 
+					"metadata": {
+						"script": "my-script", 
+						"upload_to_cloud": "true", 
+						"wait_for_results": "false", 
+						"slack_channels": "test,test2", 
+						"min_failure_delay": "3m",
+						"kubernetes_secrets": "{\"TEST_VAR\": \"secret/key\"}"
+					}
+				}`)),
 			},
 			want: func() *launchPayload {
 				p := &launchPayload{flaggerWebhook: flaggerWebhook{Name: "test", Namespace: "test", Phase: "pre-rollout"}}
@@ -83,6 +99,8 @@ func TestNewLaunchPayload(t *testing.T) {
 				p.Metadata.SlackChannels = []string{"test", "test2"}
 				p.Metadata.MinFailureDelay = 3 * time.Minute
 				p.Metadata.MinFailureDelayString = "3m"
+				p.Metadata.KubernetesSecrets = map[string]string{"TEST_VAR": "secret/key"}
+				p.Metadata.KubernetesSecretsString = `{"TEST_VAR": "secret/key"}`
 				return p
 			}(),
 		},
@@ -107,6 +125,13 @@ func TestNewLaunchPayload(t *testing.T) {
 			},
 			wantErr: errors.New(`error parsing value for 'min_failure_delay': time: invalid duration "bad"`),
 		},
+		{
+			name: "invalid kubernetes_secrets",
+			request: &http.Request{
+				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "kubernetes_secrets": "[]"}}`)),
+			},
+			wantErr: errors.New(`error parsing value for 'kubernetes_secrets': json: cannot unmarshal array into Go value of type map[string]string`),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -124,21 +149,13 @@ func TestNewLaunchPayload(t *testing.T) {
 
 func TestLaunchAndWaitCloud(t *testing.T) {
 	// Initialize controller
-	mockCtrl := gomock.NewController(t)
-	k6Client := mocks.NewMockK6Client(mockCtrl)
-	slackClient := mocks.NewMockSlackClient(mockCtrl)
-	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, slackClient)
-	handler.(*launchHandler).sleep = func(d time.Duration) {}
-	require.NoError(t, err)
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
 
 	// Expected calls
 	// * Start the run
-	fullResults, err := os.ReadFile("testdata/k6-output.txt")
-	resultParts := strings.SplitN(string(fullResults), "running", 2)
+	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", true, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -182,27 +199,58 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	assert.Equal(t, 200, rr.Result().StatusCode)
 }
 
-func TestLaunchAndWaitLocal(t *testing.T) {
+func TestSlackFailuresDontAbort(t *testing.T) {
 	// Initialize controller
-	mockCtrl := gomock.NewController(t)
-	k6Client := mocks.NewMockK6Client(mockCtrl)
-	slackClient := mocks.NewMockSlackClient(mockCtrl)
-	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, slackClient)
-	handler.(*launchHandler).sleep = func(d time.Duration) {}
-	require.NoError(t, err)
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
 
 	// Expected calls
 	// * Start the run
-	fullResults, err := os.ReadFile("testdata/k6-output.txt")
-	resultParts := strings.SplitN(string(fullResults), "running", 2)
+	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", false, gomock.Any()).Times(2).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
 	})
+
+	// * Send the initial slack message
+	slackClient.EXPECT().SendMessages(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("error sending message"))
+
+	// * Wait for the command to finish
+	testRun.EXPECT().Wait().DoAndReturn(func() error {
+		bufferWriter.Write([]byte("running" + resultParts[1]))
+		return nil
+	})
+
+	// * Upload the results file and update the slack message
+	slackClient.EXPECT().AddFileToThreads(nil, "k6-results.txt", string(fullResults)).Return(errors.New("error adding file"))
+	slackClient.EXPECT().UpdateMessages(nil, gomock.Any(), gomock.Any()).Return(errors.New("error updating message"))
+
+	// Make request
+	request := &http.Request{
+		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "slack_channels": "test,test2", "notification_context": "extra context"}}`)),
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, request)
+
+	// Expected response
+	assert.Equal(t, fullResults, rr.Body.Bytes())
+	assert.Equal(t, 200, rr.Result().StatusCode)
+}
+
+func TestLaunchAndWaitLocal(t *testing.T) {
+	// Initialize controller
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+
+	// Expected calls
+	// * Start the run
+	fullResults, resultParts := getTestOutput(t)
+	var bufferWriter io.Writer
+	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+		bufferWriter = outputWriter
+		outputWriter.Write([]byte(resultParts[0]))
+		return testRun, nil
+	}).Times(2)
 
 	// * Send the initial slack message
 	channelMap := map[string]string{"C1234": "ts1", "C12345": "ts2"}
@@ -259,21 +307,13 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 
 func TestLaunchAndWaitAndGetError(t *testing.T) {
 	// Initialize controller
-	mockCtrl := gomock.NewController(t)
-	k6Client := mocks.NewMockK6Client(mockCtrl)
-	slackClient := mocks.NewMockSlackClient(mockCtrl)
-	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, slackClient)
-	handler.(*launchHandler).sleep = func(d time.Duration) {}
-	require.NoError(t, err)
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
 
 	// Expected calls
 	// * Start the run
-	fullResults, err := os.ReadFile("testdata/k6-output.txt")
-	resultParts := strings.SplitN(string(fullResults), "running", 2)
+	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", false, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -333,24 +373,17 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 }
 
 func TestLaunchNeverStarted(t *testing.T) {
+	// Initialize controller
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
 	var sleepCalls []time.Duration
 	sleepMock := func(d time.Duration) {
 		sleepCalls = append(sleepCalls, d)
 	}
-
-	// Initialize controller
-	mockCtrl := gomock.NewController(t)
-	k6Client := mocks.NewMockK6Client(mockCtrl)
-	slackClient := mocks.NewMockSlackClient(mockCtrl)
-	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, slackClient)
-	handler.(*launchHandler).sleep = sleepMock
-	require.NoError(t, err)
+	handler.sleep = sleepMock
 
 	// Expected calls
 	// * Start the run (process fails and prints out an error)
-	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", false, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		outputWriter.Write([]byte("failed to run (k6 error)"))
 		return testRun, nil
 	})
@@ -385,20 +418,12 @@ func TestLaunchNeverStarted(t *testing.T) {
 
 func TestLaunchWithoutWaiting(t *testing.T) {
 	// Initialize controller
-	mockCtrl := gomock.NewController(t)
-	k6Client := mocks.NewMockK6Client(mockCtrl)
-	slackClient := mocks.NewMockSlackClient(mockCtrl)
-	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, slackClient)
-	handler.(*launchHandler).sleep = func(d time.Duration) {}
-	require.NoError(t, err)
+	_, k6Client, slackClient, testRun, handler := setupHandler(t)
 
 	// Expected calls
 	// * Start the run
-	fullResults, err := os.ReadFile("testdata/k6-output.txt")
-	resultParts := strings.SplitN(string(fullResults), "running", 2)
-	require.NoError(t, err)
-	k6Client.EXPECT().Start("my-script", false, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, outputWriter io.Writer) (k6.TestRun, error) {
+	_, resultParts := getTestOutput(t)
+	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
 	})
@@ -421,4 +446,147 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 	// Expected response
 	assert.Equal(t, "", rr.Body.String())
 	assert.Equal(t, 200, rr.Result().StatusCode)
+}
+
+func TestBadPayload(t *testing.T) {
+	// Initialize controller
+	_, _, _, _, handler := setupHandler(t)
+
+	// Make request
+	request := &http.Request{
+		Body: ioutil.NopCloser(strings.NewReader(`{}`)),
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, request)
+
+	// Expected response
+	assert.Equal(t, "error while validating request: error while validating base webhook: missing name\n", rr.Body.String())
+	assert.Equal(t, 400, rr.Result().StatusCode)
+}
+
+func TestGetSecret(t *testing.T) {
+	fullResults, resultParts := getTestOutput(t)
+
+	for _, tc := range []struct {
+		name              string
+		setting           string
+		kubernetesObjects []runtime.Object
+		nilKubeClient     bool
+		expected          string
+		expectedCode      int
+	}{
+		{
+			name:    "working example",
+			setting: `{\"TEST_VAR\": \"other-namespace/secret-name/secret-key\"}`,
+			kubernetesObjects: []runtime.Object{
+				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "other-namespace"}, Type: "Opaque", Data: map[string][]byte{"secret-key": []byte("secret-value")}},
+			},
+			expected:     string(fullResults),
+			expectedCode: 200,
+		},
+		{
+			name:    "no given namespace (defaults to the payload namespace)",
+			setting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			kubernetesObjects: []runtime.Object{
+				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "test-space"}, Type: "Opaque", Data: map[string][]byte{"secret-key": []byte("secret-value")}},
+			},
+			expected:     string(fullResults),
+			expectedCode: 200,
+		},
+		{
+			name:         "missing secret",
+			setting:      `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			expected:     "error fetching secret test-space/secret-name: secrets \"secret-name\" not found\n",
+			expectedCode: 400,
+		},
+		{
+			name:    "missing secret key",
+			setting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			kubernetesObjects: []runtime.Object{
+				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "test-space"}, Type: "Opaque", Data: map[string][]byte{"other-key": []byte("secret-value")}},
+			},
+			expected:     "secret test-space/secret-name does not have key secret-key\n",
+			expectedCode: 400,
+		},
+		{
+			name:          "no kube client",
+			setting:       `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			expected:      "kubernetes client is not configured\n",
+			expectedCode:  400,
+			nilKubeClient: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Initialize controller
+			_, k6Client, slackClient, testRun, handler := setupHandlerWithKubernetesObjects(t, tc.kubernetesObjects...)
+			if tc.nilKubeClient {
+				handler.kubeClient = nil
+			}
+
+			if tc.expectedCode == 200 {
+				// Expected calls
+				// * Start the run
+				var bufferWriter io.Writer
+				k6Client.EXPECT().Start("my-script", false, map[string]string{"TEST_VAR": "secret-value"}, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+					bufferWriter = outputWriter
+					outputWriter.Write([]byte(resultParts[0]))
+					return testRun, nil
+				})
+
+				// * Send the initial slack message (to no channels)
+				slackClient.EXPECT().SendMessages(nil, gomock.Any(), "").Return(nil, nil)
+
+				// * Wait for the command to finish
+				testRun.EXPECT().Wait().DoAndReturn(func() error {
+					bufferWriter.Write([]byte("running" + resultParts[1]))
+					return nil
+				})
+
+				// * Upload the results file and update the slack message (to no channels)
+				slackClient.EXPECT().AddFileToThreads(nil, "k6-results.txt", string(fullResults)).Return(nil)
+				slackClient.EXPECT().UpdateMessages(nil, gomock.Any(), "").Return(nil)
+			}
+
+			// Make request
+			request := &http.Request{
+				Body: ioutil.NopCloser(strings.NewReader(fmt.Sprintf(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "kubernetes_secrets": "%s"}}`, tc.setting))),
+			}
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, request)
+
+			// Expected response
+			assert.Equal(t, tc.expected, rr.Body.String())
+			assert.Equal(t, tc.expectedCode, rr.Result().StatusCode)
+		})
+	}
+
+}
+
+func setupHandler(t *testing.T) (*gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+	return setupHandlerWithKubernetesObjects(t)
+}
+
+func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects ...runtime.Object) (*gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+	t.Helper()
+
+	mockCtrl := gomock.NewController(t)
+	k6Client := mocks.NewMockK6Client(mockCtrl)
+	kubeClient := fake.NewSimpleClientset(expectedKubernetesObjects...)
+	slackClient := mocks.NewMockSlackClient(mockCtrl)
+	testRun := mocks.NewMockK6TestRun(mockCtrl)
+	handler, err := NewLaunchHandler(k6Client, kubeClient, slackClient)
+	handler.(*launchHandler).sleep = func(d time.Duration) {}
+	require.NoError(t, err)
+
+	return mockCtrl, k6Client, slackClient, testRun, handler.(*launchHandler)
+}
+
+func getTestOutput(t *testing.T) ([]byte, []string) {
+	t.Helper()
+
+	fullResults, err := os.ReadFile("testdata/k6-output.txt")
+	require.NoError(t, err)
+	resultParts := strings.SplitN(string(fullResults), "running", 2)
+
+	return fullResults, resultParts
 }

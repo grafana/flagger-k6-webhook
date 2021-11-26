@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -47,6 +50,10 @@ type launchPayload struct {
 		// Min delay between failures. All other runs will fail immediately. This prevents retries
 		MinFailureDelay       time.Duration
 		MinFailureDelayString string `json:"min_failure_delay"`
+
+		// Inject secrets to environment (map of `<ENV>` -> `<namespace (default: payload namespace)>/<secret name>/<secret key>`)
+		KubernetesSecrets       map[string]string
+		KubernetesSecretsString string `json:"kubernetes_secrets"`
 	} `json:"metadata"`
 }
 
@@ -100,11 +107,18 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 		return nil, fmt.Errorf("error parsing value for 'min_failure_delay': %w", err)
 	}
 
+	if payload.Metadata.KubernetesSecretsString != "" {
+		if err := json.Unmarshal([]byte(payload.Metadata.KubernetesSecretsString), &payload.Metadata.KubernetesSecrets); err != nil {
+			return nil, fmt.Errorf("error parsing value for 'kubernetes_secrets': %w", err)
+		}
+	}
+
 	return payload, nil
 }
 
 type launchHandler struct {
 	client      k6.Client
+	kubeClient  kubernetes.Interface
 	slackClient slack.Client
 
 	lastFailureTime      map[string]time.Time
@@ -115,9 +129,10 @@ type launchHandler struct {
 }
 
 // NewLaunchHandler returns an handler that launches a k6 load test.
-func NewLaunchHandler(client k6.Client, slackClient slack.Client) (http.Handler, error) {
+func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client) (http.Handler, error) {
 	return &launchHandler{
 		client:          client,
+		kubeClient:      kubeClient,
 		slackClient:     slackClient,
 		lastFailureTime: make(map[string]time.Time),
 		sleep:           time.Sleep,
@@ -137,9 +152,41 @@ func (h *launchHandler) setLastFailureTime(payload *launchPayload) {
 	h.lastFailureTime[payload.key()] = time.Now()
 }
 
+func (h *launchHandler) fetchSecrets(payload *launchPayload) (map[string]string, error) {
+	if len(payload.Metadata.KubernetesSecrets) == 0 {
+		return nil, nil
+	}
+
+	if h.kubeClient == nil {
+		return nil, errors.New("kubernetes client is not configured")
+	}
+
+	secrets := make(map[string]string)
+	for env, secret := range payload.Metadata.KubernetesSecrets {
+		parts := strings.SplitN(secret, "/", 3)
+		namespace := payload.Namespace
+		if len(parts) > 2 {
+			namespace = parts[0]
+			parts = parts[1:]
+		}
+		secretName := parts[0]
+		secretKey := parts[1]
+		secret, err := h.kubeClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("error fetching secret %s/%s: %w", namespace, secretName, err)
+		}
+		if v, ok := secret.Data[secretKey]; ok {
+			secrets[env] = string(v)
+		} else {
+			return nil, fmt.Errorf("secret %s/%s does not have key %s", namespace, secretName, secretKey)
+		}
+	}
+	return secrets, nil
+}
+
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	cmdLog := createLogEntry(req)
-	logError := func(err error) {
+	logIfError := func(err error) {
 		if err != nil {
 			cmdLog.Error(err)
 		}
@@ -170,8 +217,15 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	cmdLog.Info("fetching secrets (if any)")
+	secrets, err := h.fetchSecrets(payload)
+	if err != nil {
+		fail(err.Error())
+		return
+	}
+
 	cmdLog.Info("launching k6 test")
-	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, &buf)
+	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, secrets, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
 		return
@@ -182,8 +236,8 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	// Find the Cloud URL from the k6 output
 	if waitErr := h.waitForOutputPath(cmdLog, &buf); waitErr != nil {
 		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiFailure, "didn't start successfully"), slackContext)
-		logError(err)
-		logError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
+		logIfError(err)
+		logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
 		return
 	}
@@ -200,7 +254,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	// Write the initial message to each channel
 	slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiWarning, "has started"), slackContext)
-	logError(err)
+	logIfError(err)
 
 	if !payload.Metadata.WaitForResults {
 		cmdLog.Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
@@ -210,19 +264,19 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	// Wait for the test to finish and write the output to slack
 	cmdLog.Info("waiting for the results")
 	err = cmd.Wait()
-	logError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
+	logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 
 	// Load testing failed, log the output
 	if err != nil {
-		logError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiFailure, "has failed"), slackContext))
+		logIfError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiFailure, "has failed"), slackContext))
 		fail(fmt.Sprintf("failed to run: %v", err))
 		return
 	}
 
 	// Success!
-	logError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiSuccess, "has succeeded"), slackContext))
+	logIfError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiSuccess, "has succeeded"), slackContext))
 	_, err = resp.Write(buf.Bytes())
-	logError(err)
+	logIfError(err)
 	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
 }
 

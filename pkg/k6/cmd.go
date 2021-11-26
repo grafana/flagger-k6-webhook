@@ -16,11 +16,10 @@ type LocalRunnerClient struct {
 
 func NewLocalRunnerClient(token string) (Client, error) {
 	client := &LocalRunnerClient{token: token}
-
 	return client, nil
 }
 
-func (c *LocalRunnerClient) Start(scriptContent string, upload bool, outputWriter io.Writer) (TestRun, error) {
+func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {
 		return nil, fmt.Errorf("could not create a tempfile for the script: %w", err)
@@ -38,6 +37,11 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, outputWrite
 	cmd := c.cmd("k6", args...)
 	cmd.Stdout = outputWriter
 	cmd.Stderr = outputWriter
+
+	cmd.Env = os.Environ()
+	for k, v := range envVars {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
 	log.Debugf("launching 'k6 %s'", strings.Join(args, " "))
 	return cmd, cmd.Start()

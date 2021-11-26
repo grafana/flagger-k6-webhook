@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/grafana/flagger-k6-webhook/pkg"
@@ -8,15 +9,21 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
 	defaultPort = 80
 
-	flagCloudToken = "cloud-token"
-	flagLogLevel   = "log-level"
-	flagListenPort = "listen-port"
-	flagSlackToken = "slack-token"
+	flagCloudToken       = "cloud-token"
+	flagLogLevel         = "log-level"
+	flagListenPort       = "listen-port"
+	flagSlackToken       = "slack-token"
+	flagKubernetesClient = "kubernetes-client"
+
+	kubernetesClientNone      = "none"
+	kubernetesClientInCluster = "in-cluster"
 )
 
 func main() {
@@ -50,6 +57,12 @@ func run(args []string) error {
 			Name:    flagSlackToken,
 			EnvVars: []string{"SLACK_TOKEN"},
 		},
+		&cli.StringFlag{
+			Name:    flagKubernetesClient,
+			EnvVars: []string{"KUBERNETES_CLIENT"},
+			Value:   kubernetesClientNone,
+			Usage:   fmt.Sprintf("Kubernetes client to use: '%s' or '%s'", kubernetesClientInCluster, kubernetesClientNone),
+		},
 	}
 
 	return app.Run(args)
@@ -68,5 +81,19 @@ func launchServer(c *cli.Context) error {
 	}
 	slackClient := slack.NewClient(c.String(flagSlackToken))
 
-	return pkg.Listen(client, slackClient, c.Int(flagListenPort))
+	var kubeClient kubernetes.Interface
+	if c.String(flagKubernetesClient) == kubernetesClientInCluster {
+		log.Info("creating in-cluster kubernetes client")
+		kubeConfig, err := rest.InClusterConfig()
+		if err != nil {
+			return err
+		}
+		if kubeClient, err = kubernetes.NewForConfig(kubeConfig); err != nil {
+			return err
+		}
+	} else {
+		log.Info("not creating a kubernetes client")
+	}
+
+	return pkg.Listen(client, kubeClient, slackClient, c.Int(flagListenPort))
 }
