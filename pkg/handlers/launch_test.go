@@ -84,7 +84,8 @@ func TestNewLaunchPayload(t *testing.T) {
 						"wait_for_results": "false", 
 						"slack_channels": "test,test2", 
 						"min_failure_delay": "3m",
-						"kubernetes_secrets": "{\"TEST_VAR\": \"secret/key\"}"
+						"kubernetes_secrets": "{\"TEST_VAR\": \"secret/key\"}",
+						"env_vars": "{\"TEST_VAR2\": \"value\"}"
 					}
 				}`)),
 			},
@@ -101,6 +102,8 @@ func TestNewLaunchPayload(t *testing.T) {
 				p.Metadata.MinFailureDelayString = "3m"
 				p.Metadata.KubernetesSecrets = map[string]string{"TEST_VAR": "secret/key"}
 				p.Metadata.KubernetesSecretsString = `{"TEST_VAR": "secret/key"}`
+				p.Metadata.EnvVars = map[string]string{"TEST_VAR2": "value"}
+				p.Metadata.EnvVarsString = `{"TEST_VAR2": "value"}`
 				return p
 			}(),
 		},
@@ -131,6 +134,13 @@ func TestNewLaunchPayload(t *testing.T) {
 				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "kubernetes_secrets": "[]"}}`)),
 			},
 			wantErr: errors.New(`error parsing value for 'kubernetes_secrets': json: cannot unmarshal array into Go value of type map[string]string`),
+		},
+		{
+			name: "invalid env_vars",
+			request: &http.Request{
+				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test", "namespace": "test", "phase": "pre-rollout", "metadata": {"script": "my-script", "env_vars": "[]"}}`)),
+			},
+			wantErr: errors.New(`error parsing value for 'env_vars': json: cannot unmarshal array into Go value of type map[string]string`),
 		},
 	}
 
@@ -464,44 +474,71 @@ func TestBadPayload(t *testing.T) {
 	assert.Equal(t, 400, rr.Result().StatusCode)
 }
 
-func TestGetSecret(t *testing.T) {
+func TestEnvVars(t *testing.T) {
 	fullResults, resultParts := getTestOutput(t)
 
 	for _, tc := range []struct {
 		name              string
-		setting           string
+		secretsSetting    string
+		envVarsSetting    string
 		kubernetesObjects []runtime.Object
 		nilKubeClient     bool
 		expected          string
+		expectedEnvVars   map[string]string
 		expectedCode      int
 	}{
 		{
-			name:    "working example",
-			setting: `{\"TEST_VAR\": \"other-namespace/secret-name/secret-key\"}`,
+			name:         "no secrets",
+			expected:     string(fullResults),
+			expectedCode: 200,
+		},
+		{
+			name:            "direct env vars",
+			envVarsSetting:  `{\"FOO\": \"bar\", \"BAZ\": \"qux\"}`,
+			expected:        string(fullResults),
+			expectedEnvVars: map[string]string{"FOO": "bar", "BAZ": "qux"},
+			expectedCode:    200,
+		},
+		{
+			name:           "working example",
+			secretsSetting: `{\"TEST_VAR\": \"other-namespace/secret-name/secret-key\"}`,
 			kubernetesObjects: []runtime.Object{
 				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "other-namespace"}, Type: "Opaque", Data: map[string][]byte{"secret-key": []byte("secret-value")}},
 			},
-			expected:     string(fullResults),
-			expectedCode: 200,
+			expected:        string(fullResults),
+			expectedEnvVars: map[string]string{"TEST_VAR": "secret-value"},
+			expectedCode:    200,
 		},
 		{
-			name:    "no given namespace (defaults to the payload namespace)",
-			setting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			name:           "both env vars and secrets",
+			envVarsSetting: `{\"FOO\": \"bar\", \"BAZ\": \"qux\"}`,
+			secretsSetting: `{\"TEST_VAR\": \"other-namespace/secret-name/secret-key\"}`,
+			kubernetesObjects: []runtime.Object{
+				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "other-namespace"}, Type: "Opaque", Data: map[string][]byte{"secret-key": []byte("secret-value")}},
+			},
+			expected:        string(fullResults),
+			expectedEnvVars: map[string]string{"FOO": "bar", "BAZ": "qux", "TEST_VAR": "secret-value"},
+			expectedCode:    200,
+		},
+		{
+			name:           "no given namespace (defaults to the payload namespace)",
+			secretsSetting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
 			kubernetesObjects: []runtime.Object{
 				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "test-space"}, Type: "Opaque", Data: map[string][]byte{"secret-key": []byte("secret-value")}},
 			},
-			expected:     string(fullResults),
-			expectedCode: 200,
+			expected:        string(fullResults),
+			expectedEnvVars: map[string]string{"TEST_VAR": "secret-value"},
+			expectedCode:    200,
 		},
 		{
-			name:         "missing secret",
-			setting:      `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
-			expected:     "error fetching secret test-space/secret-name: secrets \"secret-name\" not found\n",
-			expectedCode: 400,
+			name:           "missing secret",
+			secretsSetting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			expected:       "error fetching secret test-space/secret-name: secrets \"secret-name\" not found\n",
+			expectedCode:   400,
 		},
 		{
-			name:    "missing secret key",
-			setting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			name:           "missing secret key",
+			secretsSetting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
 			kubernetesObjects: []runtime.Object{
 				&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: "test-space"}, Type: "Opaque", Data: map[string][]byte{"other-key": []byte("secret-value")}},
 			},
@@ -509,11 +546,11 @@ func TestGetSecret(t *testing.T) {
 			expectedCode: 400,
 		},
 		{
-			name:          "no kube client",
-			setting:       `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
-			expected:      "kubernetes client is not configured\n",
-			expectedCode:  400,
-			nilKubeClient: true,
+			name:           "no kube client",
+			secretsSetting: `{\"TEST_VAR\": \"secret-name/secret-key\"}`,
+			expected:       "kubernetes client is not configured\n",
+			expectedCode:   400,
+			nilKubeClient:  true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -527,7 +564,7 @@ func TestGetSecret(t *testing.T) {
 				// Expected calls
 				// * Start the run
 				var bufferWriter io.Writer
-				k6Client.EXPECT().Start("my-script", false, map[string]string{"TEST_VAR": "secret-value"}, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+				k6Client.EXPECT().Start("my-script", false, tc.expectedEnvVars, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 					bufferWriter = outputWriter
 					outputWriter.Write([]byte(resultParts[0]))
 					return testRun, nil
@@ -549,7 +586,16 @@ func TestGetSecret(t *testing.T) {
 
 			// Make request
 			request := &http.Request{
-				Body: ioutil.NopCloser(strings.NewReader(fmt.Sprintf(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "kubernetes_secrets": "%s"}}`, tc.setting))),
+				Body: ioutil.NopCloser(strings.NewReader(fmt.Sprintf(`{
+					"name": "test-name", 
+					"namespace": "test-space", 
+					"phase": "pre-rollout", 
+					"metadata": {
+						"script": "my-script", 
+						"kubernetes_secrets": "%s",
+						"env_vars": "%s"
+					}
+				}`, tc.secretsSetting, tc.envVarsSetting))),
 			}
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, request)

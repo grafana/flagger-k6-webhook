@@ -51,6 +51,7 @@ spec:
         notification_context: "My Cluster: `dev-us-east-1`" # Additional context to be added to the end of messages
         min_failure_delay: "2m" # Fail all successive runs after a failure (keyed to the namespace + name + phase) within the given duration (defaults to 2m). This prevents reruns. Set this to a duration slightly above the testing interval
         wait_for_results: "true" # Wait until the K6 analysis is completed before returning. This is required to fail/succeed on thresholds (defaults to true)
+        env_vars: "{\"KEY\": \"value\"}" # Injects additional environment variables at runtime
         kubernetes_secrets: "{\"TEST_VAR\": \"other-namespace/secret-name/secret-key\"}" # Injects additional environment variables from secrets, at runtime
 ```
 
