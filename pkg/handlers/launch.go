@@ -51,6 +51,10 @@ type launchPayload struct {
 		MinFailureDelay       time.Duration
 		MinFailureDelayString string `json:"min_failure_delay"`
 
+		// Set environment variables when running the k6 script
+		EnvVars       map[string]string
+		EnvVarsString string `json:"env_vars"`
+
 		// Inject secrets to environment (map of `<ENV>` -> `<namespace (default: payload namespace)>/<secret name>/<secret key>`)
 		KubernetesSecrets       map[string]string
 		KubernetesSecretsString string `json:"kubernetes_secrets"`
@@ -81,39 +85,55 @@ func newLaunchPayload(req *http.Request) (*launchPayload, error) {
 		return nil, fmt.Errorf("error while validating base webhook: %w", err)
 	}
 
-	if payload.Metadata.Script == "" {
-		return nil, errors.New("missing script")
-	}
-
-	if payload.Metadata.UploadToCloudString == "" {
-		payload.Metadata.UploadToCloud = false
-	} else if payload.Metadata.UploadToCloud, err = strconv.ParseBool(payload.Metadata.UploadToCloudString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'upload_to_cloud': %w", err)
-	}
-
-	if payload.Metadata.WaitForResultsString == "" {
-		payload.Metadata.WaitForResults = true
-	} else if payload.Metadata.WaitForResults, err = strconv.ParseBool(payload.Metadata.WaitForResultsString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'wait_for_results': %w", err)
-	}
-
-	if payload.Metadata.SlackChannelsString != "" {
-		payload.Metadata.SlackChannels = strings.Split(payload.Metadata.SlackChannelsString, ",")
-	}
-
-	if payload.Metadata.MinFailureDelayString == "" {
-		payload.Metadata.MinFailureDelay = 2 * time.Minute
-	} else if payload.Metadata.MinFailureDelay, err = time.ParseDuration(payload.Metadata.MinFailureDelayString); err != nil {
-		return nil, fmt.Errorf("error parsing value for 'min_failure_delay': %w", err)
-	}
-
-	if payload.Metadata.KubernetesSecretsString != "" {
-		if err := json.Unmarshal([]byte(payload.Metadata.KubernetesSecretsString), &payload.Metadata.KubernetesSecrets); err != nil {
-			return nil, fmt.Errorf("error parsing value for 'kubernetes_secrets': %w", err)
-		}
+	if err := payload.validate(); err != nil {
+		return nil, err
 	}
 
 	return payload, nil
+}
+
+func (p *launchPayload) validate() error {
+	var err error
+
+	if p.Metadata.Script == "" {
+		return errors.New("missing script")
+	}
+
+	if p.Metadata.UploadToCloudString == "" {
+		p.Metadata.UploadToCloud = false
+	} else if p.Metadata.UploadToCloud, err = strconv.ParseBool(p.Metadata.UploadToCloudString); err != nil {
+		return fmt.Errorf("error parsing value for 'upload_to_cloud': %w", err)
+	}
+
+	if p.Metadata.WaitForResultsString == "" {
+		p.Metadata.WaitForResults = true
+	} else if p.Metadata.WaitForResults, err = strconv.ParseBool(p.Metadata.WaitForResultsString); err != nil {
+		return fmt.Errorf("error parsing value for 'wait_for_results': %w", err)
+	}
+
+	if p.Metadata.SlackChannelsString != "" {
+		p.Metadata.SlackChannels = strings.Split(p.Metadata.SlackChannelsString, ",")
+	}
+
+	if p.Metadata.MinFailureDelayString == "" {
+		p.Metadata.MinFailureDelay = 2 * time.Minute
+	} else if p.Metadata.MinFailureDelay, err = time.ParseDuration(p.Metadata.MinFailureDelayString); err != nil {
+		return fmt.Errorf("error parsing value for 'min_failure_delay': %w", err)
+	}
+
+	if p.Metadata.EnvVarsString != "" {
+		if err := json.Unmarshal([]byte(p.Metadata.EnvVarsString), &p.Metadata.EnvVars); err != nil {
+			return fmt.Errorf("error parsing value for 'env_vars': %w", err)
+		}
+	}
+
+	if p.Metadata.KubernetesSecretsString != "" {
+		if err := json.Unmarshal([]byte(p.Metadata.KubernetesSecretsString), &p.Metadata.KubernetesSecrets); err != nil {
+			return fmt.Errorf("error parsing value for 'kubernetes_secrets': %w", err)
+		}
+	}
+
+	return nil
 }
 
 type launchHandler struct {
@@ -152,16 +172,21 @@ func (h *launchHandler) setLastFailureTime(payload *launchPayload) {
 	h.lastFailureTime[payload.key()] = time.Now()
 }
 
-func (h *launchHandler) fetchSecrets(payload *launchPayload) (map[string]string, error) {
+func (h *launchHandler) buildEnvVars(payload *launchPayload) (map[string]string, error) {
+	envVars := payload.Metadata.EnvVars
+
 	if len(payload.Metadata.KubernetesSecrets) == 0 {
-		return nil, nil
+		return envVars, nil
 	}
 
 	if h.kubeClient == nil {
 		return nil, errors.New("kubernetes client is not configured")
 	}
 
-	secrets := make(map[string]string)
+	if envVars == nil {
+		envVars = make(map[string]string)
+	}
+
 	for env, secret := range payload.Metadata.KubernetesSecrets {
 		parts := strings.SplitN(secret, "/", 3)
 		namespace := payload.Namespace
@@ -176,12 +201,12 @@ func (h *launchHandler) fetchSecrets(payload *launchPayload) (map[string]string,
 			return nil, fmt.Errorf("error fetching secret %s/%s: %w", namespace, secretName, err)
 		}
 		if v, ok := secret.Data[secretKey]; ok {
-			secrets[env] = string(v)
+			envVars[env] = string(v)
 		} else {
 			return nil, fmt.Errorf("secret %s/%s does not have key %s", namespace, secretName, secretKey)
 		}
 	}
-	return secrets, nil
+	return envVars, nil
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -218,14 +243,14 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	cmdLog.Info("fetching secrets (if any)")
-	secrets, err := h.fetchSecrets(payload)
+	envVars, err := h.buildEnvVars(payload)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
 
 	cmdLog.Info("launching k6 test")
-	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, secrets, &buf)
+	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
 		return
