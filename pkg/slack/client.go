@@ -12,8 +12,9 @@ type slackClientWrapper struct {
 
 func NewClient(token string) Client {
 	if token == "" {
-		return nil
+		return &noopClient{}
 	}
+
 	return &slackClientWrapper{
 		client: slack.New(token),
 	}

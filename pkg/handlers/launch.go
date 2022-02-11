@@ -150,6 +150,10 @@ type launchHandler struct {
 
 // NewLaunchHandler returns an handler that launches a k6 load test.
 func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client) (http.Handler, error) {
+	if slackClient == nil {
+		return nil, errors.New("unexpected state. Slack client is nil")
+	}
+
 	return &launchHandler{
 		client:          client,
 		kubeClient:      kubeClient,
