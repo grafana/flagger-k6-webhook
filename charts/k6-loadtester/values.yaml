@@ -60,7 +60,7 @@ affinity: {}
 
 webhook:
   name: "k6-loadtester"
-  #A list of configurable variabls
+  # A list of configurable variables
   vars:
     "K6_CLOUD_TOKEN" : ""
     "SLACK_TOKEN" : ""
