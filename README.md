@@ -69,3 +69,14 @@ Deploy this as a Service + Deployment beside Flagger:
 - Set the `SLACK_TOKEN` environment variable to allow slack updates
 
 See [the example directory](./example) for a full example on how the loadtester can be deployed along with a Canary referencing it
+
+## How to deploy using Helm
+
+```
+helm repo add [repo/chart name]
+
+helm upgrade -i k6-loadtester [repo/chart name]
+--namespace=flagger
+--set webhook.vars.K6_CLOUD_TOKEN=token
+--set webhook.vars.SLACK_TOKEN=slack_token
+```
