@@ -37,7 +37,7 @@ spec:
             ext: {
               loadimpact: {
                 name: '<cluster>/<your_service>',
-                projectID: <project id>,
+                projectID: <project id>, # Optional, will use the default project otherwise
               },
             },
           };
@@ -60,6 +60,16 @@ spec:
 Use the [k6 environment variables feature](https://k6.io/docs/using-k6/environment-variables/) to inject configurations and secrets to your script. To do so, mount your configs as environment variables onto the load tester and reference them with `${__ENV.<VAR_NAME>}`
 
 You can also refer to other secrets by using the `kubernetes_secrets` setting in metadata. This is useful if your secrets are not located in the same namespace as the load tester or if you wish to limit the amount of secret to mount to the load tester. Note that you will need to assign a Kubernetes service account that can read the secrets in question to the load tester deployment
+
+### Using K6 Cloud
+
+In order to send results to K6 cloud, the following conditions must be met:
+
+1. The script itself must support it. As shown above, in the `ext.loadimpact`, your script must define a test name and, optionally, a project ID
+2. You must pass the `upload_to_cloud: "true"` attribute in your Canary's metadata
+3. A `K6_CLOUD_TOKEN` environment variable must be set on the load tester's deployment
+
+Once all of this is setup, results will be [streamed to the cloud](https://k6.io/docs/results-visualization/cloud/)
 
 ## How to deploy
 
