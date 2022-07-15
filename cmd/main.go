@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultPort = 80
+	defaultPort = 8000
 
 	flagCloudToken       = "cloud-token"
 	flagLogLevel         = "log-level"
