@@ -64,3 +64,14 @@ webhook:
   vars:
     "K6_CLOUD_TOKEN" : ""
     "SLACK_TOKEN" : ""
+
+# Additional volumes Deployment (can be used with initContainers, below)
+volumes: []
+
+## InitContainers allows injecting additional initContainers. This can be used in combination
+## with volumes (above) and volumeMounts (below) to import test assets from configmaps, or
+## additional container images
+initContainers: []
+
+# Additional VolumeMounts on the Deployment
+volumeMounts: []
