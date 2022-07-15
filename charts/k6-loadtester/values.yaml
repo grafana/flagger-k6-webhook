@@ -64,3 +64,13 @@ webhook:
   vars:
     "K6_CLOUD_TOKEN" : ""
     "SLACK_TOKEN" : ""
+
+# Additional volumes Deployment (can be used with initContainers, below)
+volumes: []
+
+## InitContainers allows injecting additional initContainers. This is meant to allow doing some changes
+## (permissions, dir tree) on mounted volumes before starting prometheus
+initContainers: []
+
+# Additional VolumeMounts on the Deployment
+volumeMounts: []
