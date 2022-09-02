@@ -16,5 +16,5 @@ maintainers:
   - name: julienduchesne
 annotations:
   artifacthub.io/changes: |-
-    - kind: updated
-      description: Support initContainers and arbitrary volumes
+    - kind: added
+      description: Initial release
