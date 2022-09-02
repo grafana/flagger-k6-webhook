@@ -30,9 +30,9 @@ spec:
         image: ghcr.io/grafana/flagger-k6-webhook:v0.0.4
         name: k6-loadtester
         ports:
-        - containerPort: 80
+        - containerPort: 8000
           name: http-metrics
         readinessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8000
