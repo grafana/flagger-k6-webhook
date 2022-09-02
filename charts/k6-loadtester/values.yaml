@@ -15,7 +15,7 @@ logLevel: debug
 
 readinessProbe:
   httpGet:
-    port: 80
+    port: 8000
     path: /health
 
 serviceAccount:
@@ -29,20 +29,20 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+podSecurityContext:
+  fsGroup: 65534
 
 securityContext:
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
 
 service:
   type: ClusterIP
-  port: 80
+  port: 8000
 
 resources: {}
   # limits:
