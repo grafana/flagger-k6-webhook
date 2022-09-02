@@ -24,6 +24,10 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        {{- toYaml .Values.volumes | nindent 8 }}        
+      initContainers:
+{{ toYaml .Values.initContainers | nindent 8 }} 
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -47,7 +51,9 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.webhook.name }}
                   key: {{ $k | quote }}
-            {{- end }}                        
+            {{- end }}                       
+          volumeMounts:
+            {{- toYaml .Values.volumeMounts | nindent 12 }}             
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

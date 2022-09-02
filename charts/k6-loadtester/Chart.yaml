@@ -11,3 +11,10 @@ keywords:
   - canary
   - webhook
   - k6
+home: https://github.com/grafana/flagger-k6-webhook
+maintainers:
+  - name: julienduchesne
+annotations:
+  artifacthub.io/changes: |-
+    - kind: updated
+      description: Support initContainers and arbitrary volumes
