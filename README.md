@@ -23,7 +23,7 @@ spec:
     - name: k6-load-test
       timeout: 5m
       type: pre-rollout
-      url: http://k6-loadtester.flagger/launch-test
+      url: http://<k6_loadtester_service_name>.<k6_loadtester_namespace>:<k6_loadtester_service_port>/launch-test
       metadata:
         script: |
           import http from 'k6/http';
@@ -43,7 +43,7 @@ spec:
           };
 
           export default function () {
-            http.get('http://<your_service>-canary.<namespace>:80/');
+            http.get('http://<your_service>-canary.<namespace>:<service_port>/');
             sleep(0.10);
           }
         upload_to_cloud: "true"

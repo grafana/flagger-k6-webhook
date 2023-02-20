@@ -42,7 +42,7 @@ spec:
       name: k6-load-test
       timeout: 5m
       type: pre-rollout
-      url: http://k6-loadtester.flagger/launch-test
+      url: http://k6-loadtester.flagger:8000/launch-test
   autoscalerRef:
     apiVersion: autoscaling/v2beta2
     kind: HorizontalPodAutoscaler
