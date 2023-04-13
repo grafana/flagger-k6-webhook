@@ -4,6 +4,7 @@ name: docker
 steps:
 - commands:
   - echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+  - echo $CR_PAT | wc -c
   environment:
     CR_PAT:
       from_secret: github_token
@@ -28,6 +29,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 5db87893409efedcb6170926f39151aee459ef85d9174d1ff430878f066ccfc4
+hmac: 997fbd946d1f717cafe91e61ceafa197d66efc2c6f6b5fddc68dc29a88fd7833
 
 ...
