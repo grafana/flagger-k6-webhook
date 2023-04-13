@@ -29,6 +29,8 @@ local step(name, commands, image) = {
 local goStep(name, commands) = step(name, commands, image='golang:1.17-alpine');
 local dockerStep(name, commands) = step(name, [
   'echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin',
+  // print length of token
+  'echo $CR_PAT | wc -c',
 ], image='docker') {
   environment: {
     CR_PAT: { from_secret: github_secret.name },
