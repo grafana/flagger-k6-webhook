@@ -19,9 +19,9 @@ steps:
   image: golangci/golangci-lint
   name: lint
 trigger:
-  event:
+  events:
     include:
-    - push
+    - pull_request
 volumes:
 - host:
     path: /var/run/docker.sock
@@ -79,8 +79,12 @@ steps:
     event:
     - push
 trigger:
-  event:
+  branches:
     include:
+    - main
+  events:
+    include:
+    - pull_request
     - push
     - tag
 volumes:
@@ -95,6 +99,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 4b17799d53a83b7dc39f3d0a0a90bd32e0a654a2c619639f515f2e73768cb4fd
+hmac: ed802b066e981b84aa663d3f20e8aa20d99f7a1454b38ce13bce1fbaafc45cbe
 
 ...
