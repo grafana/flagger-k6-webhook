@@ -2,8 +2,8 @@ apiVersion: v2
 name: k6-loadtester
 description: Flagger webhook using k6 to do load testing of the canary before rolling out traffic
 type: application
-version: 1.0.1
-appVersion: "k6-loadtester-1.0.1"
+version: 1.1.0
+appVersion: "v0.2.0"
 sources:
   - https://github.com/grafana/flagger-k6-webhook
 keywords:
@@ -17,6 +17,4 @@ maintainers:
 annotations:
   artifacthub.io/changes: |-
     - kind: updated
-      description: Aligned appVersion with release syntax
-    - kind: added
-      description: Initial release
+      description: Update appVersion to v0.2.0
