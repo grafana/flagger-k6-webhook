@@ -8,11 +8,11 @@ name: test
 steps:
 - commands:
   - go build ./...
-  image: golang:1.17-alpine
+  image: golang:1.20-alpine
   name: build
 - commands:
   - go test ./...
-  image: golang:1.17-alpine
+  image: golang:1.20-alpine
   name: test
 - commands:
   - golangci-lint run
@@ -99,6 +99,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: 14a3bd4b542025e1392b16e3c8b4b306eb689ff8fc2c02f371aee35757543edd
+hmac: 134c0cdac18a1b10714f6e7d216a76b05e25b9204920152cc6bbc1160b452f8b
 
 ...
