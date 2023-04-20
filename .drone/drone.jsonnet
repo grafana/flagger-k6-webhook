@@ -43,12 +43,16 @@ local dockerStep(name, commands) = step(name, [
 };
 local fetchTagsStep = step('fetch tags', commands=['git fetch --tags'], image='alpine/git');
 
-local trigger(events) = {
-  trigger: {
-    event: {
-      include: events,
+local trigger(events=[], branches=[]) = {
+  trigger:
+    {
+      [if events != [] then 'event']: {
+        include: events,
+      },
+      [if branches != [] then 'branch']: {
+        include: branches,
+      },
     },
-  },
 };
 
 [
@@ -64,7 +68,7 @@ local trigger(events) = {
       step('lint', ['golangci-lint run'], image='golangci/golangci-lint'),
     ],
   }
-  + trigger(['push']),
+  + trigger(events=['pull_request']),
 
   pipeline('docker') {
     steps: [
@@ -79,7 +83,7 @@ local trigger(events) = {
       } },
     ],
   }
-  + trigger(['push', 'tag']),
+  + trigger(events=['pull_request', 'push', 'tag'], branches=['main']),
 
   github_secret,
 ]
