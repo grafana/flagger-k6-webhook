@@ -46,10 +46,10 @@ local fetchTagsStep = step('fetch tags', commands=['git fetch --tags'], image='a
 local trigger(events=[], branches=[]) = {
   trigger:
     {
-      [if events != [] then 'events']: {
+      [if events != [] then 'event']: {
         include: events,
       },
-      [if branches != [] then 'branches']: {
+      [if branches != [] then 'branch']: {
         include: branches,
       },
     },

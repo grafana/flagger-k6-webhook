@@ -19,7 +19,7 @@ steps:
   image: golangci/golangci-lint
   name: lint
 trigger:
-  events:
+  event:
     include:
     - pull_request
 volumes:
@@ -79,10 +79,10 @@ steps:
     event:
     - push
 trigger:
-  branches:
+  branch:
     include:
     - main
-  events:
+  event:
     include:
     - pull_request
     - push
@@ -99,6 +99,6 @@ kind: secret
 name: github_token
 ---
 kind: signature
-hmac: ed802b066e981b84aa663d3f20e8aa20d99f7a1454b38ce13bce1fbaafc45cbe
+hmac: 14a3bd4b542025e1392b16e3c8b4b306eb689ff8fc2c02f371aee35757543edd
 
 ...
