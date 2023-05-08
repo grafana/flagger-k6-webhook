@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/prometheus/client_golang v1.15.0
+	github.com/prometheus/client_golang v1.15.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/slack-go/slack v0.12.2
 	github.com/stretchr/testify v1.8.2
