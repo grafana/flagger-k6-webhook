@@ -9,7 +9,7 @@ require (
 	github.com/sirupsen/logrus v1.9.2
 	github.com/slack-go/slack v0.12.2
 	github.com/stretchr/testify v1.8.3
-	github.com/urfave/cli/v2 v2.25.3
+	github.com/urfave/cli/v2 v2.25.5
 	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
 	k8s.io/client-go v0.27.2
