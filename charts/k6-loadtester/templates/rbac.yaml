@@ -1,0 +1,23 @@
+{{- if .Values.serviceAccount.rbac }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "k6-loadtester.fullname" . }}
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "k6-loadtester.fullname" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "k6-loadtester.serviceAccountName" . }}
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role 
+  name: {{ include "k6-loadtester.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
