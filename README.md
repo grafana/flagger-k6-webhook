@@ -83,9 +83,9 @@ See [the example directory](./example) for a full example on how the loadtester 
 ## How to deploy using Helm
 
 ```
-helm repo add [repo/chart name]
+helm repo add flagger-k6-webhook https://grafana.github.io/flagger-k6-webhook 
 
-helm upgrade -i k6-loadtester [repo/chart name]
+helm upgrade -i k6-loadtester flagger-k6-webhook
 --namespace=flagger
 --set webhook.vars.K6_CLOUD_TOKEN=token
 --set webhook.vars.SLACK_TOKEN=slack_token

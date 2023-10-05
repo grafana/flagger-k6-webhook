@@ -26,6 +26,8 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
+  # Will create Role/Rolebinding for serviceAccount to read secrets in current namespace.
+  rbac: true
 
 podAnnotations: {}
 
@@ -62,8 +64,10 @@ webhook:
   name: "k6-loadtester"
   # A list of configurable variables
   vars:
-    "K6_CLOUD_TOKEN" : ""
-    "SLACK_TOKEN" : ""
+    # "K6_CLOUD_TOKEN" : ""
+    # "SLACK_TOKEN" : ""
+    # if you need to access secrets in the cluster, use this environment value.
+    "KUBERNETES_CLIENT": "in-cluster"
 
 # Additional volumes Deployment (can be used with initContainers, below)
 volumes: []
