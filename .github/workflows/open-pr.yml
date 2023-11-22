@@ -1,0 +1,15 @@
+name: Open PR
+
+on:
+  pull_request:
+  
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Create Pull Request
+      run: gh pr -R grafana/flagger-k6-webhook create 
