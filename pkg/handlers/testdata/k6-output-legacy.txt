@@ -7,7 +7,7 @@
 
   execution: local
      script: /tmp/k6-script504149289
-     output: cloud (https://somewhere.grafana.net/a/k6-app/runs/1157843)
+     output: cloud (https://app.k6.io/runs/1157843)
 
   scenarios: (100.00%) 1 scenario, 2 max VUs, 1m0s max duration (incl. graceful stop):
            * default: 2 looping VUs for 30s (gracefulStop: 30s)
