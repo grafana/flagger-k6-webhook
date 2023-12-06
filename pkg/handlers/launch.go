@@ -26,8 +26,8 @@ const (
 	emojiFailure = ":red_circle:"
 )
 
-// https://regex101.com/r/Pn7VUB/1
-var outputRegex = regexp.MustCompile(`output: cloud \((?P<url>https:\/\/app\.k6\.io\/runs\/\d+)\)`)
+// https://regex101.com/r/OZwd8Y/1
+var outputRegex = regexp.MustCompile(`output: cloud \((?P<url>https:\/\/((app\.k6\.io)|([^/]+\.grafana.net\/a\/k6-app))\/runs\/\d+)\)`)
 
 type launchPayload struct {
 	flaggerWebhook

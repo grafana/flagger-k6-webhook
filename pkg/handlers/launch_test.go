@@ -158,55 +158,73 @@ func TestNewLaunchPayload(t *testing.T) {
 }
 
 func TestLaunchAndWaitCloud(t *testing.T) {
-	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-
-	// Expected calls
-	// * Start the run
-	fullResults, resultParts := getTestOutput(t)
-	var bufferWriter io.Writer
-	k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
-		bufferWriter = outputWriter
-		outputWriter.Write([]byte(resultParts[0]))
-		return testRun, nil
-	})
-
-	// * Send the initial slack message
-	channelMap := map[string]string{"C1234": "ts1", "C12345": "ts2"}
-	slackClient.EXPECT().SendMessages(
-		[]string{"test", "test2"},
-		":warning: Load testing of `test-name` in namespace `test-space` has started",
-		"extra context\nCloud URL: <https://app.k6.io/runs/1157843>",
-	).Return(channelMap, nil)
-
-	// * Wait for the command to finish
-	testRun.EXPECT().Wait().DoAndReturn(func() error {
-		bufferWriter.Write([]byte("running" + resultParts[1]))
-		return nil
-	})
-
-	// * Upload the results file and update the slack message
-	slackClient.EXPECT().AddFileToThreads(
-		channelMap,
-		"k6-results.txt",
-		string(fullResults),
-	).Return(nil)
-	slackClient.EXPECT().UpdateMessages(
-		channelMap,
-		":large_green_circle: Load testing of `test-name` in namespace `test-space` has succeeded",
-		"extra context\nCloud URL: <https://app.k6.io/runs/1157843>",
-	).Return(nil)
-
-	// Make request
-	request := &http.Request{
-		Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "slack_channels": "test,test2", "notification_context": "extra context"}}`)),
+	tests := map[string]struct {
+		k6OutputFile string
+		cloudURL     string
+	}{
+		"legacy-cloud-url": {
+			k6OutputFile: "testdata/k6-output-legacy.txt",
+			cloudURL:     "https://app.k6.io/runs/1157843",
+		},
+		"grafana-cloud-url": {
+			k6OutputFile: "testdata/k6-output.txt",
+			cloudURL:     "https://somewhere.grafana.net/a/k6-app/runs/1157843",
+		},
 	}
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, request)
 
-	// Expected response
-	assert.Equal(t, fullResults, rr.Body.Bytes())
-	assert.Equal(t, 200, rr.Result().StatusCode)
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			// Initialize controller
+			_, k6Client, slackClient, testRun, handler := setupHandler(t)
+
+			// Expected calls
+			// * Start the run
+			fullResults, resultParts := getTestOutputFromFile(t, test.k6OutputFile)
+			var bufferWriter io.Writer
+			k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+				bufferWriter = outputWriter
+				outputWriter.Write([]byte(resultParts[0]))
+				return testRun, nil
+			})
+
+			// * Send the initial slack message
+			channelMap := map[string]string{"C1234": "ts1", "C12345": "ts2"}
+			slackClient.EXPECT().SendMessages(
+				[]string{"test", "test2"},
+				":warning: Load testing of `test-name` in namespace `test-space` has started",
+				fmt.Sprintf("extra context\nCloud URL: <%s>", test.cloudURL),
+			).Return(channelMap, nil)
+
+			// * Wait for the command to finish
+			testRun.EXPECT().Wait().DoAndReturn(func() error {
+				bufferWriter.Write([]byte("running" + resultParts[1]))
+				return nil
+			})
+
+			// * Upload the results file and update the slack message
+			slackClient.EXPECT().AddFileToThreads(
+				channelMap,
+				"k6-results.txt",
+				string(fullResults),
+			).Return(nil)
+			slackClient.EXPECT().UpdateMessages(
+				channelMap,
+				":large_green_circle: Load testing of `test-name` in namespace `test-space` has succeeded",
+				fmt.Sprintf("extra context\nCloud URL: <%s>", test.cloudURL),
+			).Return(nil)
+
+			// Make request
+			request := &http.Request{
+				Body: ioutil.NopCloser(strings.NewReader(`{"name": "test-name", "namespace": "test-space", "phase": "pre-rollout", "metadata": {"script": "my-script", "upload_to_cloud": "true", "slack_channels": "test,test2", "notification_context": "extra context"}}`)),
+			}
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, request)
+
+			// Expected response
+			assert.Equal(t, fullResults, rr.Body.Bytes())
+			assert.Equal(t, 200, rr.Result().StatusCode)
+		})
+	}
 }
 
 func TestSlackFailuresDontAbort(t *testing.T) {
@@ -630,7 +648,13 @@ func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects .
 func getTestOutput(t *testing.T) ([]byte, []string) {
 	t.Helper()
 
-	fullResults, err := os.ReadFile("testdata/k6-output.txt")
+	return getTestOutputFromFile(t, "testdata/k6-output.txt")
+}
+
+func getTestOutputFromFile(t *testing.T, filename string) ([]byte, []string) {
+	t.Helper()
+
+	fullResults, err := os.ReadFile(filename)
 	require.NoError(t, err)
 	resultParts := strings.SplitN(string(fullResults), "running", 2)
 
