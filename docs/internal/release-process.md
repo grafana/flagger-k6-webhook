@@ -11,8 +11,9 @@
 
 ## Helm charts
 
-1. Create a new tag with the format `k6-loadtester-<MAJOR>.<MINOR>.<PATCH>`
-   depending on the changes since the last release of the Helm charts.
+1. Bump the chart version in `charts/k6-loadtester/Chart.yaml` depending on the
+   changes since the last release of the Helm charts and push that updated chart
+   file to the `main` branch.
 
-2. Create a new GitHub release by picking the new tag and manually add notes
-   about the changes you want to cover.
+The tag and the actual release will then be handled by
+[helm/chart-releaser-action](https://github.com/helm/chart-releaser-action).
