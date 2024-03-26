@@ -15,9 +15,8 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: {{ include "k6-loadtester.serviceAccountName" . }}
-  apiGroup: rbac.authorization.k8s.io
 roleRef:
-  kind: Role 
+  kind: Role
   name: {{ include "k6-loadtester.fullname" . }}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}
