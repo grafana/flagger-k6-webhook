@@ -15,3 +15,7 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      k8s.io:
+        patterns:
+          - k8s.io/*
