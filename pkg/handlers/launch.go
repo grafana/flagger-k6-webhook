@@ -144,23 +144,106 @@ type launchHandler struct {
 	lastFailureTime      map[string]time.Time
 	lastFailureTimeMutex sync.Mutex
 
+	processToWaitFor       chan k6.TestRun
+	cancelWaitForProcesses context.CancelFunc
+
 	// mockables
 	sleep func(time.Duration)
 }
 
+type LaunchHandler interface {
+	http.Handler
+	Close()
+}
+
 // NewLaunchHandler returns an handler that launches a k6 load test.
-func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client) (http.Handler, error) {
+func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client) (LaunchHandler, error) {
 	if slackClient == nil {
 		return nil, errors.New("unexpected state. Slack client is nil")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 
-	return &launchHandler{
-		client:          client,
-		kubeClient:      kubeClient,
-		slackClient:     slackClient,
-		lastFailureTime: make(map[string]time.Time),
-		sleep:           time.Sleep,
-	}, nil
+	h := &launchHandler{
+		client:           client,
+		kubeClient:       kubeClient,
+		slackClient:      slackClient,
+		lastFailureTime:  make(map[string]time.Time),
+		sleep:            time.Sleep,
+		processToWaitFor: make(chan k6.TestRun, 1),
+	}
+	h.cancelWaitForProcesses = cancel
+	go h.waitForProcesses(ctx)
+	return h, nil
+}
+
+func (h *launchHandler) Close() {
+	if h.cancelWaitForProcesses != nil {
+		h.cancelWaitForProcesses()
+	}
+}
+
+// waitForProcesses handles incoming processes and waits for them to complete.
+// This way we can avoid k6 jobs where we do not need the results to become
+// zombie processes.
+func (h *launchHandler) waitForProcesses(ctx context.Context) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		<-ctx.Done()
+		close(h.processToWaitFor)
+		wg.Done()
+	}()
+	// We have a fixed number of available process handlers:
+	maxProcessHandlers := 100
+	availableProcessHandlers := make(chan struct{}, maxProcessHandlers)
+	for i := 0; i < maxProcessHandlers; i++ {
+		availableProcessHandlers <- struct{}{}
+	}
+loop:
+	for {
+		select {
+		case cmd := <-h.processToWaitFor:
+			// If we have a handler available, we can proceed:
+			log.Debugf("waiting for an available process handler")
+			select {
+			case <-ctx.Done():
+				break loop
+			case <-availableProcessHandlers:
+				log.Debugf("process handler available")
+				wg.Add(1)
+				go func() {
+					h.waitForProcess(ctx, cmd)
+					availableProcessHandlers <- struct{}{}
+					wg.Done()
+				}()
+			}
+		case <-ctx.Done():
+			break loop
+		}
+	}
+	wg.Wait()
+	close(availableProcessHandlers)
+}
+
+func (h *launchHandler) waitForProcess(ctx context.Context, cmd k6.TestRun) {
+	log.WithField("pid", cmd.PID()).Debug("waiting for testrun to exit")
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = cmd.Kill()
+	}()
+	_ = cmd.Wait()
+	log.WithField("pid", cmd.PID()).Debugf("testrun exited")
+}
+
+// registerProcessCleanup adds a handler to the process so that it will
+// eventually be closed and its resources returned.
+//
+// Note that this method can actually block which will, in turn, cause the
+// calling HTTP handler to be blocked.
+func (h *launchHandler) registerProcessCleanup(cmd k6.TestRun) {
+	h.processToWaitFor <- cmd
 }
 
 func (h *launchHandler) getLastFailureTime(payload *launchPayload) (time.Time, bool) {
@@ -268,6 +351,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		logIfError(err)
 		logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
+		h.registerProcessCleanup(cmd)
 		return
 	}
 
@@ -275,6 +359,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		url, err := getCloudURL(buf.String())
 		if err != nil {
 			fail(err.Error())
+			h.registerProcessCleanup(cmd)
 			return
 		}
 		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
@@ -287,6 +372,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	if !payload.Metadata.WaitForResults {
 		cmdLog.Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
+		h.registerProcessCleanup(cmd)
 		return
 	}
 

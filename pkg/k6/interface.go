@@ -12,4 +12,6 @@ type Client interface {
 
 type TestRun interface {
 	Wait() error
+	Kill() error
+	PID() int
 }

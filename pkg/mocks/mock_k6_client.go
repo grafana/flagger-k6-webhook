@@ -73,6 +73,34 @@ func (m *MockK6TestRun) EXPECT() *MockK6TestRunMockRecorder {
 	return m.recorder
 }
 
+// Kill mocks base method.
+func (m *MockK6TestRun) Kill() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Kill")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Kill indicates an expected call of Kill.
+func (mr *MockK6TestRunMockRecorder) Kill() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Kill", reflect.TypeOf((*MockK6TestRun)(nil).Kill))
+}
+
+// PID mocks base method.
+func (m *MockK6TestRun) PID() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PID")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// PID indicates an expected call of PID.
+func (mr *MockK6TestRunMockRecorder) PID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PID", reflect.TypeOf((*MockK6TestRun)(nil).PID))
+}
+
 // Wait mocks base method.
 func (m *MockK6TestRun) Wait() error {
 	m.ctrl.T.Helper()

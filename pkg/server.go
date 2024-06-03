@@ -19,6 +19,7 @@ func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack
 	if err != nil {
 		return err
 	}
+	defer launchHandler.Close()
 
 	serveAddress := fmt.Sprintf(":%d", port)
 	logrus.Info("starting server at " + serveAddress)

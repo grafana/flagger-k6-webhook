@@ -75,14 +75,14 @@ func TestNewLaunchPayload(t *testing.T) {
 			name: "set values",
 			request: &http.Request{
 				Body: ioutil.NopCloser(strings.NewReader(`{
-					"name": "test", 
-					"namespace": "test", 
-					"phase": "pre-rollout", 
+					"name": "test",
+					"namespace": "test",
+					"phase": "pre-rollout",
 					"metadata": {
-						"script": "my-script", 
-						"upload_to_cloud": "true", 
-						"wait_for_results": "false", 
-						"slack_channels": "test,test2", 
+						"script": "my-script",
+						"upload_to_cloud": "true",
+						"wait_for_results": "false",
+						"slack_channels": "test,test2",
 						"min_failure_delay": "3m",
 						"kubernetes_secrets": "{\"TEST_VAR\": \"secret/key\"}",
 						"env_vars": "{\"TEST_VAR2\": \"value\"}"
@@ -176,6 +176,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			// Initialize controller
 			_, k6Client, slackClient, testRun, handler := setupHandler(t)
+			t.Cleanup(handler.Close)
 
 			// Expected calls
 			// * Start the run
@@ -230,6 +231,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 func TestSlackFailuresDontAbort(t *testing.T) {
 	// Initialize controller
 	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
 
 	// Expected calls
 	// * Start the run
@@ -269,6 +271,7 @@ func TestSlackFailuresDontAbort(t *testing.T) {
 func TestLaunchAndWaitLocal(t *testing.T) {
 	// Initialize controller
 	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
 
 	// Expected calls
 	// * Start the run
@@ -336,6 +339,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 func TestLaunchAndWaitAndGetError(t *testing.T) {
 	// Initialize controller
 	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
 
 	// Expected calls
 	// * Start the run
@@ -403,6 +407,12 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 func TestLaunchNeverStarted(t *testing.T) {
 	// Initialize controller
 	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
+
+	testRun.EXPECT().PID().Return(-1).AnyTimes()
+	testRun.EXPECT().Kill().Return(nil).AnyTimes()
+	testRun.EXPECT().Wait().Return(nil).AnyTimes()
+
 	var sleepCalls []time.Duration
 	sleepMock := func(d time.Duration) {
 		sleepCalls = append(sleepCalls, d)
@@ -447,6 +457,11 @@ func TestLaunchNeverStarted(t *testing.T) {
 func TestLaunchWithoutWaiting(t *testing.T) {
 	// Initialize controller
 	_, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
+
+	testRun.EXPECT().PID().Return(-1).AnyTimes()
+	testRun.EXPECT().Kill().Return(nil).AnyTimes()
+	testRun.EXPECT().Wait().Return(nil).AnyTimes()
 
 	// Expected calls
 	// * Start the run
@@ -479,6 +494,7 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 func TestBadPayload(t *testing.T) {
 	// Initialize controller
 	_, _, _, _, handler := setupHandler(t)
+	t.Cleanup(handler.Close)
 
 	// Make request
 	request := &http.Request{
@@ -577,6 +593,7 @@ func TestEnvVars(t *testing.T) {
 			if tc.nilKubeClient {
 				handler.kubeClient = nil
 			}
+			t.Cleanup(handler.Close)
 
 			if tc.expectedCode == 200 {
 				// Expected calls
@@ -605,11 +622,11 @@ func TestEnvVars(t *testing.T) {
 			// Make request
 			request := &http.Request{
 				Body: ioutil.NopCloser(strings.NewReader(fmt.Sprintf(`{
-					"name": "test-name", 
-					"namespace": "test-space", 
-					"phase": "pre-rollout", 
+					"name": "test-name",
+					"namespace": "test-space",
+					"phase": "pre-rollout",
 					"metadata": {
-						"script": "my-script", 
+						"script": "my-script",
 						"kubernetes_secrets": "%s",
 						"env_vars": "%s"
 					}

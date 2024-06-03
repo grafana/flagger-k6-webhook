@@ -19,6 +19,24 @@ func NewLocalRunnerClient(token string) (Client, error) {
 	return client, nil
 }
 
+type DefaultTestRun struct {
+	*exec.Cmd
+}
+
+func (tr *DefaultTestRun) Kill() error {
+	if tr.Cmd != nil && tr.Cmd.Process != nil {
+		return tr.Cmd.Process.Kill()
+	}
+	return nil
+}
+
+func (tr *DefaultTestRun) PID() int {
+	if tr.Cmd != nil && tr.Cmd.Process != nil {
+		return tr.Cmd.Process.Pid
+	}
+	return -1
+}
+
 func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {
@@ -44,7 +62,7 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map
 	}
 
 	log.Debugf("launching 'k6 %s'", strings.Join(args, " "))
-	return cmd, cmd.Start()
+	return &DefaultTestRun{cmd}, cmd.Start()
 }
 
 func (c *LocalRunnerClient) cmd(name string, arg ...string) *exec.Cmd {
