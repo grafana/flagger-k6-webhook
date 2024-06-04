@@ -147,6 +147,7 @@ type launchHandler struct {
 	processToWaitFor       chan k6.TestRun
 	cancelWaitForProcesses context.CancelFunc
 	waitForProcessesDone   chan struct{}
+	ctx                    context.Context
 
 	// mockables
 	sleep func(time.Duration)
@@ -172,6 +173,7 @@ func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackCl
 		sleep:                time.Sleep,
 		processToWaitFor:     make(chan k6.TestRun, 1),
 		waitForProcessesDone: make(chan struct{}, 1),
+		ctx:                  ctx,
 	}
 	h.cancelWaitForProcesses = cancel
 	go h.waitForProcesses(ctx, maxProcessHandlers)
@@ -183,6 +185,11 @@ func (h *launchHandler) Close() {
 		h.cancelWaitForProcesses()
 	}
 	<-h.waitForProcessesDone
+}
+
+// context exposes the internal context for testing purposes.
+func (h *launchHandler) context() context.Context {
+	return h.ctx
 }
 
 // waitForProcesses handles incoming processes and waits for them to complete.
@@ -237,14 +244,6 @@ func (h *launchHandler) waitForProcess(ctx context.Context, cmd k6.TestRun) {
 	}
 	pid := cmd.PID()
 	log.WithField("pid", pid).Debug("waiting for testrun to exit")
-	go func() {
-		<-ctx.Done()
-		if cmd.Exited() {
-			return
-		}
-		log.WithField("pid", pid).Debug("killing process")
-		_ = cmd.Kill()
-	}()
 	_ = cmd.Wait()
 	log.WithField("pid", pid).Debugf("testrun exited")
 }
@@ -349,7 +348,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	cmdLog.Info("launching k6 test")
-	cmd, err := h.client.Start(payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
+	cmd, err := h.client.Start(h.ctx, payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
 		return

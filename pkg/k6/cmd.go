@@ -1,6 +1,7 @@
 package k6
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ func (tr *DefaultTestRun) Exited() bool {
 	return false
 }
 
-func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
+func (c *LocalRunnerClient) Start(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {
 		return nil, fmt.Errorf("could not create a tempfile for the script: %w", err)
@@ -59,7 +60,7 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map
 	}
 	args = append(args, tempFile.Name())
 
-	cmd := c.cmd("k6", args...)
+	cmd := c.cmd(ctx, "k6", args...)
 	cmd.Stdout = outputWriter
 	cmd.Stderr = outputWriter
 
@@ -72,8 +73,8 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map
 	return &DefaultTestRun{cmd}, cmd.Start()
 }
 
-func (c *LocalRunnerClient) cmd(name string, arg ...string) *exec.Cmd {
-	cmd := exec.Command(name, arg...)
+func (c *LocalRunnerClient) cmd(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, arg...)
 	cmd.Env = append(os.Environ(), "K6_CLOUD_TOKEN="+c.token)
 
 	return cmd

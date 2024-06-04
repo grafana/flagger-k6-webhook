@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -184,7 +185,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 			// * Start the run
 			fullResults, resultParts := getTestOutputFromFile(t, test.k6OutputFile)
 			var bufferWriter io.Writer
-			k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+			k6Client.EXPECT().Start(gomock.Any(), "my-script", true, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 				bufferWriter = outputWriter
 				outputWriter.Write([]byte(resultParts[0]))
 				return testRun, nil
@@ -239,7 +240,7 @@ func TestSlackFailuresDontAbort(t *testing.T) {
 	// * Start the run
 	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	k6Client.EXPECT().Start("my-script", true, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start(gomock.Any(), "my-script", true, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -279,7 +280,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 	// * Start the run
 	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start(gomock.Any(), "my-script", false, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -347,7 +348,7 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 	// * Start the run
 	fullResults, resultParts := getTestOutput(t)
 	var bufferWriter io.Writer
-	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start(gomock.Any(), "my-script", false, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		bufferWriter = outputWriter
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
@@ -424,7 +425,7 @@ func TestLaunchNeverStarted(t *testing.T) {
 
 	// Expected calls
 	// * Start the run (process fails and prints out an error)
-	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start(gomock.Any(), "my-script", false, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		outputWriter.Write([]byte("failed to run (k6 error)"))
 		return testRun, nil
 	})
@@ -470,7 +471,7 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 	// Expected calls
 	// * Start the run
 	_, resultParts := getTestOutput(t)
-	k6Client.EXPECT().Start("my-script", false, nil, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+	k6Client.EXPECT().Start(gomock.Any(), "my-script", false, nil, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 		outputWriter.Write([]byte(resultParts[0]))
 		return testRun, nil
 	})
@@ -603,7 +604,7 @@ func TestEnvVars(t *testing.T) {
 				// Expected calls
 				// * Start the run
 				var bufferWriter io.Writer
-				k6Client.EXPECT().Start("my-script", false, tc.expectedEnvVars, gomock.Any()).DoAndReturn(func(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+				k6Client.EXPECT().Start(gomock.Any(), "my-script", false, tc.expectedEnvVars, gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
 					bufferWriter = outputWriter
 					outputWriter.Write([]byte(resultParts[0]))
 					return testRun, nil
@@ -668,7 +669,7 @@ func TestProcessHandler(t *testing.T) {
 	t.Run("kills process if handler is closed", func(t *testing.T) {
 		logrus.SetLevel(logrus.DebugLevel)
 		_, _, _, _, handler := setupHandler(t)
-		cmd := exec.Command("sleep", "10")
+		cmd := exec.CommandContext(handler.context(), "sleep", "10")
 		require.NoError(t, cmd.Start())
 		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmd})
 
