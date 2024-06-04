@@ -339,8 +339,30 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	if payload.Metadata.WaitForResults {
+		defer cancelCtx()
+	}
+	go func() {
+		if payload.Metadata.WaitForResults {
+			select {
+			case <-req.Context().Done():
+				log.Info("request canceled")
+				cancelCtx()
+			case <-h.ctx.Done():
+				cancelCtx()
+			}
+		} else {
+			// If we are not waiting for the results then we should only cancel
+			// if the global context is done:
+			<-h.ctx.Done()
+			cancelCtx()
+		}
+		log.Info("cancelling process")
+	}()
+
 	cmdLog.Info("launching k6 test")
-	cmd, err := h.client.Start(h.ctx, payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
+	cmd, err := h.client.Start(ctx, payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
 		return
