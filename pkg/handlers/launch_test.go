@@ -655,7 +655,7 @@ func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects .
 	kubeClient := fake.NewSimpleClientset(expectedKubernetesObjects...)
 	slackClient := mocks.NewMockSlackClient(mockCtrl)
 	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, kubeClient, slackClient)
+	handler, err := NewLaunchHandler(k6Client, kubeClient, slackClient, 100)
 	handler.(*launchHandler).sleep = func(d time.Duration) {}
 	require.NoError(t, err)
 

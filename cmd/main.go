@@ -14,13 +14,15 @@ import (
 )
 
 const (
-	defaultPort = 8000
+	defaultPort               = 8000
+	defaultMaxProcessHandlers = 100
 
-	flagCloudToken       = "cloud-token"
-	flagLogLevel         = "log-level"
-	flagListenPort       = "listen-port"
-	flagSlackToken       = "slack-token"
-	flagKubernetesClient = "kubernetes-client"
+	flagCloudToken         = "cloud-token"
+	flagLogLevel           = "log-level"
+	flagListenPort         = "listen-port"
+	flagSlackToken         = "slack-token"
+	flagKubernetesClient   = "kubernetes-client"
+	flagMaxProcessHandlers = "max-process-handlers"
 
 	kubernetesClientNone      = "none"
 	kubernetesClientInCluster = "in-cluster"
@@ -63,6 +65,11 @@ func run(args []string) error {
 			Value:   kubernetesClientNone,
 			Usage:   fmt.Sprintf("Kubernetes client to use: '%s' or '%s'", kubernetesClientInCluster, kubernetesClientNone),
 		},
+		&cli.IntFlag{
+			Name:    flagMaxProcessHandlers,
+			EnvVars: []string{"MAX_PROCESS_HANDLERS"},
+			Value:   defaultMaxProcessHandlers,
+		},
 	}
 
 	return app.Run(args)
@@ -95,5 +102,5 @@ func launchServer(c *cli.Context) error {
 		log.Info("not creating a kubernetes client")
 	}
 
-	return pkg.Listen(client, kubeClient, slackClient, c.Int(flagListenPort))
+	return pkg.Listen(client, kubeClient, slackClient, c.Int(flagListenPort), c.Int(flagMaxProcessHandlers))
 }

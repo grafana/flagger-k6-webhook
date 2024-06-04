@@ -157,7 +157,7 @@ type LaunchHandler interface {
 }
 
 // NewLaunchHandler returns an handler that launches a k6 load test.
-func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client) (LaunchHandler, error) {
+func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, maxProcessHandlers int) (LaunchHandler, error) {
 	if slackClient == nil {
 		return nil, errors.New("unexpected state. Slack client is nil")
 	}
@@ -172,7 +172,7 @@ func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackCl
 		processToWaitFor: make(chan k6.TestRun, 1),
 	}
 	h.cancelWaitForProcesses = cancel
-	go h.waitForProcesses(ctx)
+	go h.waitForProcesses(ctx, maxProcessHandlers)
 	return h, nil
 }
 
@@ -185,7 +185,7 @@ func (h *launchHandler) Close() {
 // waitForProcesses handles incoming processes and waits for them to complete.
 // This way we can avoid k6 jobs where we do not need the results to become
 // zombie processes.
-func (h *launchHandler) waitForProcesses(ctx context.Context) {
+func (h *launchHandler) waitForProcesses(ctx context.Context, maxProcessHandlers int) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -194,7 +194,6 @@ func (h *launchHandler) waitForProcesses(ctx context.Context) {
 		wg.Done()
 	}()
 	// We have a fixed number of available process handlers:
-	maxProcessHandlers := 100
 	availableProcessHandlers := make(chan struct{}, maxProcessHandlers)
 	for i := 0; i < maxProcessHandlers; i++ {
 		availableProcessHandlers <- struct{}{}

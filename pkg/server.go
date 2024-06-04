@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, port int) error {
-	launchHandler, err := handlers.NewLaunchHandler(client, kubeClient, slackClient)
+func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, port int, maxProcessHandlers int) error {
+	launchHandler, err := handlers.NewLaunchHandler(client, kubeClient, slackClient, maxProcessHandlers)
 	if err != nil {
 		return err
 	}
