@@ -188,6 +188,8 @@ func (h *launchHandler) Close() {
 }
 
 // context exposes the internal context for testing purposes.
+//
+//nolint:unused
 func (h *launchHandler) context() context.Context {
 	return h.ctx
 }
@@ -224,7 +226,7 @@ loop:
 				log.Debugf("process handler available")
 				wg.Add(1)
 				go func() {
-					h.waitForProcess(ctx, cmd)
+					h.waitForProcess(cmd)
 					availableProcessHandlers <- struct{}{}
 					wg.Done()
 				}()
@@ -237,7 +239,7 @@ loop:
 	close(availableProcessHandlers)
 }
 
-func (h *launchHandler) waitForProcess(ctx context.Context, cmd k6.TestRun) {
+func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
 	if cmd == nil {
 		log.Warnf("nil as testrun passed")
 		return
