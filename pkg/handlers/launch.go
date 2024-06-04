@@ -146,6 +146,7 @@ type launchHandler struct {
 
 	processToWaitFor       chan k6.TestRun
 	cancelWaitForProcesses context.CancelFunc
+	waitForProcessesDone   chan struct{}
 
 	// mockables
 	sleep func(time.Duration)
@@ -164,12 +165,13 @@ func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackCl
 	ctx, cancel := context.WithCancel(context.Background())
 
 	h := &launchHandler{
-		client:           client,
-		kubeClient:       kubeClient,
-		slackClient:      slackClient,
-		lastFailureTime:  make(map[string]time.Time),
-		sleep:            time.Sleep,
-		processToWaitFor: make(chan k6.TestRun, 1),
+		client:               client,
+		kubeClient:           kubeClient,
+		slackClient:          slackClient,
+		lastFailureTime:      make(map[string]time.Time),
+		sleep:                time.Sleep,
+		processToWaitFor:     make(chan k6.TestRun, 1),
+		waitForProcessesDone: make(chan struct{}, 1),
 	}
 	h.cancelWaitForProcesses = cancel
 	go h.waitForProcesses(ctx, maxProcessHandlers)
@@ -180,12 +182,16 @@ func (h *launchHandler) Close() {
 	if h.cancelWaitForProcesses != nil {
 		h.cancelWaitForProcesses()
 	}
+	<-h.waitForProcessesDone
 }
 
 // waitForProcesses handles incoming processes and waits for them to complete.
 // This way we can avoid k6 jobs where we do not need the results to become
 // zombie processes.
 func (h *launchHandler) waitForProcesses(ctx context.Context, maxProcessHandlers int) {
+	defer func() {
+		h.waitForProcessesDone <- struct{}{}
+	}()
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -225,15 +231,22 @@ loop:
 }
 
 func (h *launchHandler) waitForProcess(ctx context.Context, cmd k6.TestRun) {
-	log.WithField("pid", cmd.PID()).Debug("waiting for testrun to exit")
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	if cmd == nil {
+		log.Warnf("nil as testrun passed")
+		return
+	}
+	pid := cmd.PID()
+	log.WithField("pid", pid).Debug("waiting for testrun to exit")
 	go func() {
 		<-ctx.Done()
+		if cmd.Exited() {
+			return
+		}
+		log.WithField("pid", pid).Debug("killing process")
 		_ = cmd.Kill()
 	}()
 	_ = cmd.Wait()
-	log.WithField("pid", cmd.PID()).Debugf("testrun exited")
+	log.WithField("pid", pid).Debugf("testrun exited")
 }
 
 // registerProcessCleanup adds a handler to the process so that it will

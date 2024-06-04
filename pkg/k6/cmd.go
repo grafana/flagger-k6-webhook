@@ -37,6 +37,13 @@ func (tr *DefaultTestRun) PID() int {
 	return -1
 }
 
+func (tr *DefaultTestRun) Exited() bool {
+	if tr.Cmd != nil && tr.Cmd.ProcessState != nil {
+		return tr.Cmd.ProcessState.Exited()
+	}
+	return false
+}
+
 func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {

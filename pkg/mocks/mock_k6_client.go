@@ -73,6 +73,20 @@ func (m *MockK6TestRun) EXPECT() *MockK6TestRunMockRecorder {
 	return m.recorder
 }
 
+// Exited mocks base method.
+func (m *MockK6TestRun) Exited() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exited")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Exited indicates an expected call of Exited.
+func (mr *MockK6TestRunMockRecorder) Exited() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exited", reflect.TypeOf((*MockK6TestRun)(nil).Exited))
+}
+
 // Kill mocks base method.
 func (m *MockK6TestRun) Kill() error {
 	m.ctrl.T.Helper()

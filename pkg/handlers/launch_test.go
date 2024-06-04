@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/grafana/flagger-k6-webhook/pkg/mocks"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -412,6 +414,7 @@ func TestLaunchNeverStarted(t *testing.T) {
 	testRun.EXPECT().PID().Return(-1).AnyTimes()
 	testRun.EXPECT().Kill().Return(nil).AnyTimes()
 	testRun.EXPECT().Wait().Return(nil).AnyTimes()
+	testRun.EXPECT().Exited().Return(true).AnyTimes()
 
 	var sleepCalls []time.Duration
 	sleepMock := func(d time.Duration) {
@@ -462,6 +465,7 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 	testRun.EXPECT().PID().Return(-1).AnyTimes()
 	testRun.EXPECT().Kill().Return(nil).AnyTimes()
 	testRun.EXPECT().Wait().Return(nil).AnyTimes()
+	testRun.EXPECT().Exited().Return(true).AnyTimes()
 
 	// Expected calls
 	// * Start the run
@@ -641,6 +645,46 @@ func TestEnvVars(t *testing.T) {
 		})
 	}
 
+}
+
+func TestProcessHandler(t *testing.T) {
+	t.Run("waits on processes", func(t *testing.T) {
+		ctrl, _, _, _, handler := setupHandler(t)
+		// Now let's produce a handful of test runs and check that they are waited
+		// on
+		for range 10 {
+			tr := mocks.NewMockK6TestRun(ctrl)
+			tr.EXPECT().PID().Return(-1).AnyTimes()
+			tr.EXPECT().Kill().Return(nil).AnyTimes()
+			// Wait is called exactly once by the process handler
+			tr.EXPECT().Wait().Return(nil).Times(1)
+			tr.EXPECT().Exited().Return(true).AnyTimes()
+			handler.registerProcessCleanup(tr)
+		}
+		time.Sleep(time.Second * 2)
+		handler.Close()
+	})
+
+	t.Run("kills process if handler is closed", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		_, _, _, _, handler := setupHandler(t)
+		cmd := exec.Command("sleep", "10")
+		require.NoError(t, cmd.Start())
+		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmd})
+
+		// Also register a process that will be done by the time we are closing
+		// the handler:
+		cmdSuccess := exec.Command("true")
+		require.NoError(t, cmdSuccess.Start())
+		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmdSuccess})
+
+		// Yield so that the handler can actually pick up the process:
+		time.Sleep(time.Second)
+
+		handler.Close()
+		require.False(t, cmd.ProcessState.Success())
+		require.True(t, cmdSuccess.ProcessState.Success())
+	})
 }
 
 func setupHandler(t *testing.T) (*gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {

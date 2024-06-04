@@ -14,4 +14,5 @@ type TestRun interface {
 	Wait() error
 	Kill() error
 	PID() int
+	Exited() bool
 }
