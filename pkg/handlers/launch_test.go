@@ -178,8 +178,9 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// Initialize controller
-			_, k6Client, slackClient, testRun, handler := setupHandler(t)
-			t.Cleanup(handler.Close)
+			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+			t.Cleanup(handler.Wait)
+			t.Cleanup(cancel)
 
 			// Expected calls
 			// * Start the run
@@ -233,8 +234,9 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 
 func TestSlackFailuresDontAbort(t *testing.T) {
 	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	// Expected calls
 	// * Start the run
@@ -273,8 +275,9 @@ func TestSlackFailuresDontAbort(t *testing.T) {
 
 func TestLaunchAndWaitLocal(t *testing.T) {
 	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	// Expected calls
 	// * Start the run
@@ -341,8 +344,9 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 
 func TestLaunchAndWaitAndGetError(t *testing.T) {
 	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	// Expected calls
 	// * Start the run
@@ -409,8 +413,9 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 
 func TestLaunchNeverStarted(t *testing.T) {
 	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	testRun.EXPECT().PID().Return(-1).AnyTimes()
 	testRun.EXPECT().Kill().Return(nil).AnyTimes()
@@ -460,8 +465,9 @@ func TestLaunchNeverStarted(t *testing.T) {
 
 func TestLaunchWithoutWaiting(t *testing.T) {
 	// Initialize controller
-	_, k6Client, slackClient, testRun, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	testRun.EXPECT().PID().Return(-1).AnyTimes()
 	testRun.EXPECT().Kill().Return(nil).AnyTimes()
@@ -498,8 +504,9 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 
 func TestBadPayload(t *testing.T) {
 	// Initialize controller
-	_, _, _, _, handler := setupHandler(t)
-	t.Cleanup(handler.Close)
+	_, cancel, _, _, _, _, handler := setupHandler(t)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
 
 	// Make request
 	request := &http.Request{
@@ -594,11 +601,12 @@ func TestEnvVars(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Initialize controller
-			_, k6Client, slackClient, testRun, handler := setupHandlerWithKubernetesObjects(t, tc.kubernetesObjects...)
+			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandlerWithKubernetesObjects(t, tc.kubernetesObjects...)
 			if tc.nilKubeClient {
 				handler.kubeClient = nil
 			}
-			t.Cleanup(handler.Close)
+			t.Cleanup(handler.Wait)
+			t.Cleanup(cancel)
 
 			if tc.expectedCode == 200 {
 				// Expected calls
@@ -650,7 +658,7 @@ func TestEnvVars(t *testing.T) {
 
 func TestProcessHandler(t *testing.T) {
 	t.Run("waits on processes", func(t *testing.T) {
-		ctrl, _, _, _, handler := setupHandler(t)
+		_, cancel, ctrl, _, _, _, handler := setupHandler(t)
 		// Now let's produce a handful of test runs and check that they are waited
 		// on
 		for range 10 {
@@ -663,13 +671,14 @@ func TestProcessHandler(t *testing.T) {
 			handler.registerProcessCleanup(tr)
 		}
 		time.Sleep(time.Second * 2)
-		handler.Close()
+		cancel()
+		handler.Wait()
 	})
 
 	t.Run("kills process if handler is closed", func(t *testing.T) {
 		logrus.SetLevel(logrus.DebugLevel)
-		_, _, _, _, handler := setupHandler(t)
-		cmd := exec.CommandContext(handler.context(), "sleep", "10")
+		ctx, cancelCtx, _, _, _, _, handler := setupHandler(t)
+		cmd := exec.CommandContext(ctx, "sleep", "10")
 		require.NoError(t, cmd.Start())
 		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmd})
 
@@ -682,17 +691,18 @@ func TestProcessHandler(t *testing.T) {
 		// Yield so that the handler can actually pick up the process:
 		time.Sleep(time.Second)
 
-		handler.Close()
+		cancelCtx()
+		handler.Wait()
 		require.False(t, cmd.ProcessState.Success())
 		require.True(t, cmdSuccess.ProcessState.Success())
 	})
 }
 
-func setupHandler(t *testing.T) (*gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+func setupHandler(t *testing.T) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
 	return setupHandlerWithKubernetesObjects(t)
 }
 
-func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects ...runtime.Object) (*gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects ...runtime.Object) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
 	t.Helper()
 
 	mockCtrl := gomock.NewController(t)
@@ -700,11 +710,12 @@ func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects .
 	kubeClient := fake.NewSimpleClientset(expectedKubernetesObjects...)
 	slackClient := mocks.NewMockSlackClient(mockCtrl)
 	testRun := mocks.NewMockK6TestRun(mockCtrl)
-	handler, err := NewLaunchHandler(k6Client, kubeClient, slackClient, 100)
+	ctx, cancel := context.WithCancel(context.Background())
+	handler, err := NewLaunchHandler(ctx, k6Client, kubeClient, slackClient, 100)
 	handler.(*launchHandler).sleep = func(d time.Duration) {}
 	require.NoError(t, err)
 
-	return mockCtrl, k6Client, slackClient, testRun, handler.(*launchHandler)
+	return ctx, cancel, mockCtrl, k6Client, slackClient, testRun, handler.(*launchHandler)
 }
 
 func getTestOutput(t *testing.T) ([]byte, []string) {

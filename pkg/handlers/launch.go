@@ -144,10 +144,9 @@ type launchHandler struct {
 	lastFailureTime      map[string]time.Time
 	lastFailureTimeMutex sync.Mutex
 
-	processToWaitFor       chan k6.TestRun
-	cancelWaitForProcesses context.CancelFunc
-	waitForProcessesDone   chan struct{}
-	ctx                    context.Context
+	processToWaitFor     chan k6.TestRun
+	waitForProcessesDone chan struct{}
+	ctx                  context.Context
 
 	// mockables
 	sleep func(time.Duration)
@@ -155,15 +154,14 @@ type launchHandler struct {
 
 type LaunchHandler interface {
 	http.Handler
-	Close()
+	Wait()
 }
 
 // NewLaunchHandler returns an handler that launches a k6 load test.
-func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, maxProcessHandlers int) (LaunchHandler, error) {
+func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, maxProcessHandlers int) (LaunchHandler, error) {
 	if slackClient == nil {
 		return nil, errors.New("unexpected state. Slack client is nil")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 
 	h := &launchHandler{
 		client:               client,
@@ -175,23 +173,15 @@ func NewLaunchHandler(client k6.Client, kubeClient kubernetes.Interface, slackCl
 		waitForProcessesDone: make(chan struct{}, 1),
 		ctx:                  ctx,
 	}
-	h.cancelWaitForProcesses = cancel
 	go h.waitForProcesses(ctx, maxProcessHandlers)
 	return h, nil
 }
 
-func (h *launchHandler) Close() {
-	if h.cancelWaitForProcesses != nil {
-		h.cancelWaitForProcesses()
-	}
+// Wait is blocking until all subprocesses have terminated. This should only be
+// used if the passed context can (and is) canceled.
+func (h *launchHandler) Wait() {
 	<-h.waitForProcessesDone
-}
-
-// context exposes the internal context for testing purposes.
-//
-//nolint:unused
-func (h *launchHandler) context() context.Context {
-	return h.ctx
+	log.Debug("launch handler finished")
 }
 
 // waitForProcesses handles incoming processes and waits for them to complete.

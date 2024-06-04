@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/grafana/flagger-k6-webhook/pkg"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
@@ -35,6 +38,8 @@ func main() {
 }
 
 func run(args []string) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 	app := cli.NewApp()
 	app.Name = "flagger-k6-webhook"
 	app.Usage = "Launches k6 load testing from a flagger webhook"
@@ -72,10 +77,11 @@ func run(args []string) error {
 		},
 	}
 
-	return app.Run(args)
+	return app.RunContext(ctx, args)
 }
 
 func launchServer(c *cli.Context) error {
+	ctx := c.Context
 	logLevel, err := log.ParseLevel(c.String(flagLogLevel))
 	if err != nil {
 		return err
@@ -102,5 +108,5 @@ func launchServer(c *cli.Context) error {
 		log.Info("not creating a kubernetes client")
 	}
 
-	return pkg.Listen(client, kubeClient, slackClient, c.Int(flagListenPort), c.Int(flagMaxProcessHandlers))
+	return pkg.Listen(ctx, client, kubeClient, slackClient, c.Int(flagListenPort), c.Int(flagMaxProcessHandlers))
 }
