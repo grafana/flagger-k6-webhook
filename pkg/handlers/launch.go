@@ -308,13 +308,14 @@ func (h *launchHandler) buildEnvVars(payload *launchPayload) (map[string]string,
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	cmdLog := createLogEntry(req)
 	select {
 	case <-h.availableTestRuns:
 	default:
+		cmdLog.Warn("Maximum concurrent test runs reached. Rejecting request.")
 		http.Error(resp, "Maximum concurrent test runs reached", http.StatusTooManyRequests)
 		return
 	}
-	cmdLog := createLogEntry(req)
 	logIfError := func(err error) {
 		if err != nil {
 			cmdLog.Error(err)
