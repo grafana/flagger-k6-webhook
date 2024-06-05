@@ -311,7 +311,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	select {
 	case <-h.availableTestRuns:
 	default:
-		http.Error(resp, "Maximum concurrent test runs reached", 429)
+		http.Error(resp, "Maximum concurrent test runs reached", http.StatusTooManyRequests)
 		return
 	}
 	cmdLog := createLogEntry(req)
