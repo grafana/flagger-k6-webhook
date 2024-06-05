@@ -340,25 +340,13 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
-	if payload.Metadata.WaitForResults {
-		defer cancelCtx()
-	}
-	go func() {
+	defer func() {
 		if payload.Metadata.WaitForResults {
-			select {
-			case <-req.Context().Done():
-				log.Info("request canceled")
-				cancelCtx()
-			case <-h.ctx.Done():
-				cancelCtx()
-			}
-		} else {
-			// If we are not waiting for the results then we should only cancel
-			// if the global context is done:
-			<-h.ctx.Done()
 			cancelCtx()
 		}
-		log.Info("cancelling process")
+	}()
+	go func() {
+		h.propagateCancel(req, payload, cancelCtx)
 	}()
 
 	cmdLog.Info("launching k6 test")
@@ -418,6 +406,23 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	_, err = resp.Write(buf.Bytes())
 	logIfError(err)
 	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
+}
+
+func (h *launchHandler) propagateCancel(req *http.Request, payload *launchPayload, cancelCtx context.CancelFunc) {
+	if payload.Metadata.WaitForResults {
+		select {
+		case <-req.Context().Done():
+			cancelCtx()
+		case <-h.ctx.Done():
+			cancelCtx()
+		}
+	} else {
+		// If we are not waiting for the results then we should only cancel
+		// if the global context is done:
+		<-h.ctx.Done()
+		cancelCtx()
+	}
+	log.Info("canceling process")
 }
 
 func (h *launchHandler) waitForOutputPath(cmdLog *log.Entry, buf *bytes.Buffer) error {
