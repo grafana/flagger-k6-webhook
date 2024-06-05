@@ -186,7 +186,9 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 		Help: "The maximum number of concurrent tests",
 	})
 	metricMaxConcurrentTests.Set(float64(maxConcurrentTests))
-	prometheus.Register(metricMaxConcurrentTests)
+	if err := prometheus.Register(metricMaxConcurrentTests); err != nil {
+		log.Warnf("Failed to register new metric: %s", err.Error())
+	}
 
 	metricAvailableConcurrentTests := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "launch_available_concurrent_tests",
@@ -194,7 +196,9 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 	}, func() float64 {
 		return float64(len(h.availableTestRuns))
 	})
-	prometheus.Register(metricAvailableConcurrentTests)
+	if err := prometheus.Register(metricAvailableConcurrentTests); err != nil {
+		log.Warnf("Failed to register new metric: %s", err.Error())
+	}
 
 	go h.waitForProcesses(ctx)
 	return h, nil
