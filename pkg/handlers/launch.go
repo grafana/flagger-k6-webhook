@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -148,6 +149,8 @@ type launchHandler struct {
 	waitForProcessesDone chan struct{}
 	ctx                  context.Context
 
+	availableTestRuns chan struct{}
+
 	// mockables
 	sleep func(time.Duration)
 }
@@ -158,7 +161,7 @@ type LaunchHandler interface {
 }
 
 // NewLaunchHandler returns an handler that launches a k6 load test.
-func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, maxProcessHandlers int) (LaunchHandler, error) {
+func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, maxConcurrentTests int) (LaunchHandler, error) {
 	if slackClient == nil {
 		return nil, errors.New("unexpected state. Slack client is nil")
 	}
@@ -173,7 +176,27 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 		waitForProcessesDone: make(chan struct{}, 1),
 		ctx:                  ctx,
 	}
-	go h.waitForProcesses(ctx, maxProcessHandlers)
+	h.availableTestRuns = make(chan struct{}, maxConcurrentTests)
+	for range maxConcurrentTests {
+		h.availableTestRuns <- struct{}{}
+	}
+
+	metricMaxConcurrentTests := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "launch_max_concurrent_tests",
+		Help: "The maximum number of concurrent tests",
+	})
+	metricMaxConcurrentTests.Set(float64(maxConcurrentTests))
+	prometheus.Register(metricMaxConcurrentTests)
+
+	metricAvailableConcurrentTests := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "launch_available_concurrent_tests",
+		Help: "The current number of available concurrent tests. If 0 then new requests will be rejected",
+	}, func() float64 {
+		return float64(len(h.availableTestRuns))
+	})
+	prometheus.Register(metricAvailableConcurrentTests)
+
+	go h.waitForProcesses(ctx)
 	return h, nil
 }
 
@@ -187,46 +210,25 @@ func (h *launchHandler) Wait() {
 // waitForProcesses handles incoming processes and waits for them to complete.
 // This way we can avoid k6 jobs where we do not need the results to become
 // zombie processes.
-func (h *launchHandler) waitForProcesses(ctx context.Context, maxProcessHandlers int) {
+func (h *launchHandler) waitForProcesses(ctx context.Context) {
 	defer func() {
 		h.waitForProcessesDone <- struct{}{}
 	}()
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		<-ctx.Done()
-		close(h.processToWaitFor)
-		wg.Done()
-	}()
-	// We have a fixed number of available process handlers:
-	availableProcessHandlers := make(chan struct{}, maxProcessHandlers)
-	for i := 0; i < maxProcessHandlers; i++ {
-		availableProcessHandlers <- struct{}{}
-	}
 loop:
 	for {
 		select {
 		case cmd := <-h.processToWaitFor:
-			// If we have a handler available, we can proceed:
-			log.Debugf("waiting for an available process handler")
-			select {
-			case <-ctx.Done():
-				break loop
-			case <-availableProcessHandlers:
-				log.Debugf("process handler available")
-				wg.Add(1)
-				go func() {
-					h.waitForProcess(cmd)
-					availableProcessHandlers <- struct{}{}
-					wg.Done()
-				}()
-			}
+			wg.Add(1)
+			go func() {
+				h.waitForProcess(cmd)
+				wg.Done()
+			}()
 		case <-ctx.Done():
 			break loop
 		}
 	}
 	wg.Wait()
-	close(availableProcessHandlers)
 }
 
 func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
@@ -238,6 +240,8 @@ func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
 	log.WithField("pid", pid).Debug("waiting for testrun to exit")
 	_ = cmd.Wait()
 	log.WithField("pid", pid).Debugf("testrun exited")
+
+	h.availableTestRuns <- struct{}{}
 }
 
 // registerProcessCleanup adds a handler to the process so that it will
@@ -300,6 +304,12 @@ func (h *launchHandler) buildEnvVars(payload *launchPayload) (map[string]string,
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	select {
+	case <-h.availableTestRuns:
+	default:
+		http.Error(resp, "Maximum concurrent test runs reached", 429)
+		return
+	}
 	cmdLog := createLogEntry(req)
 	logIfError := func(err error) {
 		if err != nil {
@@ -390,6 +400,9 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	// Wait for the test to finish and write the output to slack
+	defer func() {
+		h.availableTestRuns <- struct{}{}
+	}()
 	cmdLog.Info("waiting for the results")
 	err = cmd.Wait()
 	logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))

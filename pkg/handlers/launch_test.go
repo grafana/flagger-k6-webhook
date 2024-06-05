@@ -178,7 +178,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// Initialize controller
-			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 			t.Cleanup(handler.Wait)
 			t.Cleanup(cancel)
 
@@ -234,7 +234,7 @@ func TestLaunchAndWaitCloud(t *testing.T) {
 
 func TestSlackFailuresDontAbort(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -275,7 +275,7 @@ func TestSlackFailuresDontAbort(t *testing.T) {
 
 func TestLaunchAndWaitLocal(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -344,7 +344,7 @@ func TestLaunchAndWaitLocal(t *testing.T) {
 
 func TestLaunchAndWaitAndGetError(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -413,7 +413,7 @@ func TestLaunchAndWaitAndGetError(t *testing.T) {
 
 func TestLaunchNeverStarted(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -465,7 +465,7 @@ func TestLaunchNeverStarted(t *testing.T) {
 
 func TestLaunchWithoutWaiting(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t)
+	_, cancel, _, k6Client, slackClient, testRun, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -504,7 +504,7 @@ func TestLaunchWithoutWaiting(t *testing.T) {
 
 func TestBadPayload(t *testing.T) {
 	// Initialize controller
-	_, cancel, _, _, _, _, handler := setupHandler(t)
+	_, cancel, _, _, _, _, handler := setupHandler(t, 100)
 	t.Cleanup(handler.Wait)
 	t.Cleanup(cancel)
 
@@ -601,7 +601,7 @@ func TestEnvVars(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Initialize controller
-			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandlerWithKubernetesObjects(t, tc.kubernetesObjects...)
+			_, cancel, _, k6Client, slackClient, testRun, handler := setupHandlerWithKubernetesObjects(t, 100, tc.kubernetesObjects...)
 			if tc.nilKubeClient {
 				handler.kubeClient = nil
 			}
@@ -658,10 +658,13 @@ func TestEnvVars(t *testing.T) {
 
 func TestProcessHandler(t *testing.T) {
 	t.Run("waits on processes", func(t *testing.T) {
-		_, cancel, ctrl, _, _, _, handler := setupHandler(t)
+		logrus.SetLevel(logrus.DebugLevel)
+		_, cancel, ctrl, _, _, _, handler := setupHandler(t, 100)
+		t.Log("Starting up")
 		// Now let's produce a handful of test runs and check that they are waited
 		// on
 		for range 10 {
+			<-handler.availableTestRuns
 			tr := mocks.NewMockK6TestRun(ctrl)
 			tr.EXPECT().PID().Return(-1).AnyTimes()
 			tr.EXPECT().Kill().Return(nil).AnyTimes()
@@ -671,21 +674,24 @@ func TestProcessHandler(t *testing.T) {
 			handler.registerProcessCleanup(tr)
 		}
 		time.Sleep(time.Second * 2)
+		t.Log("Cancelling handler")
 		cancel()
 		handler.Wait()
 	})
 
 	t.Run("kills process if handler is closed", func(t *testing.T) {
 		logrus.SetLevel(logrus.DebugLevel)
-		ctx, cancelCtx, _, _, _, _, handler := setupHandler(t)
+		ctx, cancelCtx, _, _, _, _, handler := setupHandler(t, 100)
 		cmd := exec.CommandContext(ctx, "sleep", "10")
 		require.NoError(t, cmd.Start())
+		<-handler.availableTestRuns
 		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmd})
 
 		// Also register a process that will be done by the time we are closing
 		// the handler:
 		cmdSuccess := exec.Command("true")
 		require.NoError(t, cmdSuccess.Start())
+		<-handler.availableTestRuns
 		handler.registerProcessCleanup(&k6.DefaultTestRun{Cmd: cmdSuccess})
 
 		// Yield so that the handler can actually pick up the process:
@@ -698,11 +704,62 @@ func TestProcessHandler(t *testing.T) {
 	})
 }
 
-func setupHandler(t *testing.T) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
-	return setupHandlerWithKubernetesObjects(t)
+// If we get too many concurrent test requests, a 429 should be returned by the
+// ServeHTTP method.
+func Test429OnExcessiveRequests(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	// Initialize controller
+	_, cancel, ctrl, k6Client, slackClient, testRun1, handler := setupHandler(t, 1)
+	t.Cleanup(handler.Wait)
+	t.Cleanup(cancel)
+
+	slackClient.EXPECT().SendMessages(nil, gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	slackClient.EXPECT().AddFileToThreads(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	_, resultParts := getTestOutputFromFile(t, "testdata/k6-output.txt")
+
+	// The first request should go through but the second should be rejected
+	// with a 429 response as it would exceed the concurrent testrun limit:
+	request1 := &http.Request{
+		Body: io.NopCloser(strings.NewReader(`{"name": "hello", "namespace": "default", "phase": "somephase", "metadata": {"upload_to_cloud": "false", "wait_for_results": "false", "script": "import { sleep } from 'k6'; export default function() { sleep(10) }"}}`)),
+	}
+
+	var bufferWriter1 io.Writer
+	k6Client.EXPECT().Start(gomock.Any(), gomock.Any(), false, gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (k6.TestRun, error) {
+		bufferWriter1 = outputWriter
+		outputWriter.Write([]byte(resultParts[0]))
+		return testRun1, nil
+	}).AnyTimes()
+	testRun1.EXPECT().PID().Return(-1).AnyTimes()
+	testRun1.EXPECT().Wait().DoAndReturn(func() error {
+		time.Sleep(time.Second * 2)
+		bufferWriter1.Write([]byte("running" + resultParts[1]))
+		return nil
+	}).AnyTimes()
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, request1)
+	require.Equal(t, 200, rr1.Code)
+
+	testRun2 := mocks.NewMockK6TestRun(ctrl)
+	request2 := &http.Request{
+		Body: io.NopCloser(strings.NewReader(`{"name": "hello", "namespace": "default", "phase": "somephase", "metadata": {"upload_to_cloud": "false", "wait_for_results": "false", "script": "import { sleep } from 'k6'; export default function() { sleep(10) }"}}`)),
+	}
+
+	// All these mock calls should actually never happen as the request is rejected right away
+	k6Client.EXPECT().Start(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	testRun2.EXPECT().PID().Return(-1).Times(0)
+	testRun2.EXPECT().Wait().Times(0)
+
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, request2)
+	require.Equal(t, 429, rr2.Code)
 }
 
-func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects ...runtime.Object) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+func setupHandler(t *testing.T, maxConcurrentTests int) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
+	return setupHandlerWithKubernetesObjects(t, maxConcurrentTests)
+}
+
+func setupHandlerWithKubernetesObjects(t *testing.T, maxConcurrentTests int, expectedKubernetesObjects ...runtime.Object) (context.Context, context.CancelFunc, *gomock.Controller, *mocks.MockK6Client, *mocks.MockSlackClient, *mocks.MockK6TestRun, *launchHandler) {
 	t.Helper()
 
 	mockCtrl := gomock.NewController(t)
@@ -711,7 +768,7 @@ func setupHandlerWithKubernetesObjects(t *testing.T, expectedKubernetesObjects .
 	slackClient := mocks.NewMockSlackClient(mockCtrl)
 	testRun := mocks.NewMockK6TestRun(mockCtrl)
 	ctx, cancel := context.WithCancel(context.Background())
-	handler, err := NewLaunchHandler(ctx, k6Client, kubeClient, slackClient, 100)
+	handler, err := NewLaunchHandler(ctx, k6Client, kubeClient, slackClient, maxConcurrentTests)
 	handler.(*launchHandler).sleep = func(d time.Duration) {}
 	require.NoError(t, err)
 
