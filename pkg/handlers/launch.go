@@ -172,7 +172,7 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 		slackClient:          slackClient,
 		lastFailureTime:      make(map[string]time.Time),
 		sleep:                time.Sleep,
-		processToWaitFor:     make(chan k6.TestRun, 1),
+		processToWaitFor:     make(chan k6.TestRun, maxConcurrentTests),
 		waitForProcessesDone: make(chan struct{}, 1),
 		ctx:                  ctx,
 	}
