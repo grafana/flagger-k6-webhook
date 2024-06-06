@@ -210,7 +210,7 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 		Name:       "launch_test_duration",
 		Help:       "Durations of the executed k6 test run in seconds",
 		Objectives: map[float64]float64{0.5: float64(30)},
-	}, []string{"exitCode"})
+	}, []string{"exit_code"})
 	h.metricTestDuration = metricTestDuration
 	h.metricsRegistry = prometheus.NewRegistry()
 	_ = h.metricsRegistry.Register(h.metricTestDuration)
@@ -466,7 +466,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 func (h *launchHandler) trackExecutionDuration(cmd k6.TestRun) {
 	if dur := cmd.ExecutionDuration(); dur != 0 {
-		h.metricTestDuration.With(prometheus.Labels{"exitCode": fmt.Sprintf("%d", cmd.ExitCode())}).Observe(float64(dur / time.Second))
+		h.metricTestDuration.With(prometheus.Labels{"exit_code": fmt.Sprintf("%d", cmd.ExitCode())}).Observe(float64(dur / time.Second))
 	}
 }
 
