@@ -25,6 +25,8 @@ const (
 	emojiSuccess = ":large_green_circle:"
 	emojiWarning = ":warning:"
 	emojiFailure = ":red_circle:"
+
+	metricTestDurationName = "launch_test_duration"
 )
 
 // https://regex101.com/r/OZwd8Y/1
@@ -207,7 +209,7 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 	// expected wait time in case the maximum number of concurrent tests is
 	// reached:
 	metricTestDuration := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:       "launch_test_duration",
+		Name:       metricTestDurationName,
 		Help:       "Durations of the executed k6 test run in seconds",
 		Objectives: map[float64]float64{0.5: float64(30)},
 	}, []string{"exit_code"})
@@ -329,7 +331,7 @@ func (h *launchHandler) getWaitTime() int64 {
 		return 60
 	}
 	for _, family := range families {
-		if family.GetName() == "launch_test_duration" {
+		if family.GetName() == metricTestDurationName {
 			for _, metric := range family.GetMetric() {
 				for _, quantile := range metric.GetSummary().GetQuantile() {
 					if quantile.GetQuantile() == 0.5 {
