@@ -660,7 +660,6 @@ func TestProcessHandler(t *testing.T) {
 	t.Run("waits on processes", func(t *testing.T) {
 		logrus.SetLevel(logrus.DebugLevel)
 		_, cancel, ctrl, _, _, _, handler := setupHandler(t, 100)
-		t.Log("Starting up")
 		// Now let's produce a handful of test runs and check that they are waited
 		// on
 		for range 10 {
@@ -671,6 +670,8 @@ func TestProcessHandler(t *testing.T) {
 			// Wait is called exactly once by the process handler
 			tr.EXPECT().Wait().Return(nil).Times(1)
 			tr.EXPECT().Exited().Return(true).AnyTimes()
+			tr.EXPECT().ExitCode().Return(0).AnyTimes()
+			tr.EXPECT().ExecutionDuration().Return(time.Minute).AnyTimes()
 			handler.registerProcessCleanup(tr)
 		}
 		time.Sleep(time.Second * 2)
@@ -767,6 +768,12 @@ func setupHandlerWithKubernetesObjects(t *testing.T, maxConcurrentTests int, exp
 	kubeClient := fake.NewSimpleClientset(expectedKubernetesObjects...)
 	slackClient := mocks.NewMockSlackClient(mockCtrl)
 	testRun := mocks.NewMockK6TestRun(mockCtrl)
+
+	// For now we do not test the ExecutionDuration and so can set a default
+	// value here:
+	testRun.EXPECT().ExecutionDuration().Return(time.Minute).AnyTimes()
+	testRun.EXPECT().ExitCode().Return(0).AnyTimes()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	handler, err := NewLaunchHandler(ctx, k6Client, kubeClient, slackClient, maxConcurrentTests)
 	handler.(*launchHandler).sleep = func(d time.Duration) {}

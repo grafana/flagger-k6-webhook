@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -22,6 +23,34 @@ func NewLocalRunnerClient(token string) (Client, error) {
 
 type DefaultTestRun struct {
 	*exec.Cmd
+	startedAt time.Time
+	exitedAt  time.Time
+}
+
+func (tr *DefaultTestRun) Start() error {
+	tr.startedAt = time.Now()
+	return tr.Cmd.Start()
+}
+
+func (tr *DefaultTestRun) Wait() error {
+	defer func() {
+		tr.exitedAt = time.Now()
+	}()
+	return tr.Cmd.Wait()
+}
+
+func (tr *DefaultTestRun) ExitCode() int {
+	if tr.Cmd != nil && tr.Cmd.ProcessState != nil {
+		return tr.Cmd.ProcessState.ExitCode()
+	}
+	return -1
+}
+
+func (tr *DefaultTestRun) ExecutionDuration() time.Duration {
+	if tr.startedAt.IsZero() || tr.exitedAt.IsZero() {
+		return time.Duration(0)
+	}
+	return tr.exitedAt.Sub(tr.startedAt)
 }
 
 func (tr *DefaultTestRun) Kill() error {
@@ -70,7 +99,8 @@ func (c *LocalRunnerClient) Start(ctx context.Context, scriptContent string, upl
 	}
 
 	log.Debugf("launching 'k6 %s'", strings.Join(args, " "))
-	return &DefaultTestRun{cmd}, cmd.Start()
+	run := &DefaultTestRun{Cmd: cmd}
+	return run, run.Start()
 }
 
 func (c *LocalRunnerClient) cmd(ctx context.Context, name string, arg ...string) *exec.Cmd {

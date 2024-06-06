@@ -5,6 +5,7 @@ package k6
 import (
 	"context"
 	"io"
+	"time"
 )
 
 type Client interface {
@@ -16,4 +17,6 @@ type TestRun interface {
 	Kill() error
 	PID() int
 	Exited() bool
+	ExitCode() int
+	ExecutionDuration() time.Duration
 }

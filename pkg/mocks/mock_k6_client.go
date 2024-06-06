@@ -8,6 +8,7 @@ import (
 	context "context"
 	io "io"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	k6 "github.com/grafana/flagger-k6-webhook/pkg/k6"
@@ -72,6 +73,34 @@ func NewMockK6TestRun(ctrl *gomock.Controller) *MockK6TestRun {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockK6TestRun) EXPECT() *MockK6TestRunMockRecorder {
 	return m.recorder
+}
+
+// ExecutionDuration mocks base method.
+func (m *MockK6TestRun) ExecutionDuration() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecutionDuration")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// ExecutionDuration indicates an expected call of ExecutionDuration.
+func (mr *MockK6TestRunMockRecorder) ExecutionDuration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionDuration", reflect.TypeOf((*MockK6TestRun)(nil).ExecutionDuration))
+}
+
+// ExitCode mocks base method.
+func (m *MockK6TestRun) ExitCode() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExitCode")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// ExitCode indicates an expected call of ExitCode.
+func (mr *MockK6TestRunMockRecorder) ExitCode() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExitCode", reflect.TypeOf((*MockK6TestRun)(nil).ExitCode))
 }
 
 // Exited mocks base method.

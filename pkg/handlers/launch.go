@@ -151,6 +151,9 @@ type launchHandler struct {
 
 	availableTestRuns chan struct{}
 
+	metricsRegistry    *prometheus.Registry
+	metricTestDuration *prometheus.SummaryVec
+
 	// mockables
 	sleep func(time.Duration)
 }
@@ -200,6 +203,18 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 		log.Warnf("Failed to register new metric: %s", err.Error())
 	}
 
+	// metricTestDuration is an internal metric that we use to calculate the
+	// expected wait time in case the maximum number of concurrent tests is
+	// reached:
+	metricTestDuration := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name:       "launch_test_duration",
+		Help:       "Durations of the executed k6 test run in seconds",
+		Objectives: map[float64]float64{0.5: float64(30)},
+	}, []string{"exitCode"})
+	h.metricTestDuration = metricTestDuration
+	h.metricsRegistry = prometheus.NewRegistry()
+	_ = h.metricsRegistry.Register(h.metricTestDuration)
+
 	go h.waitForProcesses(ctx)
 	return h, nil
 }
@@ -243,6 +258,7 @@ func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
 	pid := cmd.PID()
 	log.WithField("pid", pid).Debug("waiting for testrun to exit")
 	_ = cmd.Wait()
+	h.trackExecutionDuration(cmd)
 	log.WithField("pid", pid).Debugf("testrun exited")
 
 	h.availableTestRuns <- struct{}{}
@@ -307,12 +323,33 @@ func (h *launchHandler) buildEnvVars(payload *launchPayload) (map[string]string,
 	return envVars, nil
 }
 
+func (h *launchHandler) getWaitTime() int64 {
+	families, err := h.metricsRegistry.Gather()
+	if err != nil {
+		return 60
+	}
+	for _, family := range families {
+		if family.GetName() == "launch_test_duration" {
+			for _, metric := range family.GetMetric() {
+				for _, quantile := range metric.GetSummary().GetQuantile() {
+					if quantile.GetQuantile() == 0.5 {
+						result := quantile.GetValue()
+						return int64(result)
+					}
+				}
+			}
+		}
+	}
+	return 60
+}
+
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	cmdLog := createLogEntry(req)
 	select {
 	case <-h.availableTestRuns:
 	default:
 		cmdLog.Warn("Maximum concurrent test runs reached. Rejecting request.")
+		resp.Header().Set("Retry-After", fmt.Sprintf("%d", h.getWaitTime()))
 		http.Error(resp, "Maximum concurrent test runs reached", http.StatusTooManyRequests)
 		return
 	}
@@ -410,6 +447,7 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}()
 	cmdLog.Info("waiting for the results")
 	err = cmd.Wait()
+	h.trackExecutionDuration(cmd)
 	logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 
 	// Load testing failed, log the output
@@ -424,6 +462,12 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	_, err = resp.Write(buf.Bytes())
 	logIfError(err)
 	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
+}
+
+func (h *launchHandler) trackExecutionDuration(cmd k6.TestRun) {
+	if dur := cmd.ExecutionDuration(); dur != 0 {
+		h.metricTestDuration.With(prometheus.Labels{"exitCode": fmt.Sprintf("%d", cmd.ExitCode())}).Observe(float64(dur / time.Second))
+	}
 }
 
 func (h *launchHandler) propagateCancel(req *http.Request, payload *launchPayload, cancelCtx context.CancelFunc) {
