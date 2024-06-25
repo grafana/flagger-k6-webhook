@@ -1,11 +1,13 @@
 package k6
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -19,7 +21,60 @@ func NewLocalRunnerClient(token string) (Client, error) {
 	return client, nil
 }
 
-func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
+type DefaultTestRun struct {
+	*exec.Cmd
+	startedAt time.Time
+	exitedAt  time.Time
+}
+
+func (tr *DefaultTestRun) Start() error {
+	tr.startedAt = time.Now()
+	return tr.Cmd.Start()
+}
+
+func (tr *DefaultTestRun) Wait() error {
+	defer func() {
+		tr.exitedAt = time.Now()
+	}()
+	return tr.Cmd.Wait()
+}
+
+func (tr *DefaultTestRun) ExitCode() int {
+	if tr.Cmd != nil && tr.Cmd.ProcessState != nil {
+		return tr.Cmd.ProcessState.ExitCode()
+	}
+	return -1
+}
+
+func (tr *DefaultTestRun) ExecutionDuration() time.Duration {
+	if tr.startedAt.IsZero() || tr.exitedAt.IsZero() {
+		return time.Duration(0)
+	}
+	return tr.exitedAt.Sub(tr.startedAt)
+}
+
+func (tr *DefaultTestRun) Kill() error {
+	if tr.Cmd != nil && tr.Cmd.Process != nil {
+		return tr.Cmd.Process.Kill()
+	}
+	return nil
+}
+
+func (tr *DefaultTestRun) PID() int {
+	if tr.Cmd != nil && tr.Cmd.Process != nil {
+		return tr.Cmd.Process.Pid
+	}
+	return -1
+}
+
+func (tr *DefaultTestRun) Exited() bool {
+	if tr.Cmd != nil && tr.Cmd.ProcessState != nil {
+		return tr.Cmd.ProcessState.Exited()
+	}
+	return false
+}
+
+func (c *LocalRunnerClient) Start(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
 	tempFile, err := os.CreateTemp("", "k6-script")
 	if err != nil {
 		return nil, fmt.Errorf("could not create a tempfile for the script: %w", err)
@@ -34,7 +89,7 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map
 	}
 	args = append(args, tempFile.Name())
 
-	cmd := c.cmd("k6", args...)
+	cmd := c.cmd(ctx, "k6", args...)
 	cmd.Stdout = outputWriter
 	cmd.Stderr = outputWriter
 
@@ -44,11 +99,12 @@ func (c *LocalRunnerClient) Start(scriptContent string, upload bool, envVars map
 	}
 
 	log.Debugf("launching 'k6 %s'", strings.Join(args, " "))
-	return cmd, cmd.Start()
+	run := &DefaultTestRun{Cmd: cmd}
+	return run, run.Start()
 }
 
-func (c *LocalRunnerClient) cmd(name string, arg ...string) *exec.Cmd {
-	cmd := exec.Command(name, arg...)
+func (c *LocalRunnerClient) cmd(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, arg...)
 	cmd.Env = append(os.Environ(), "K6_CLOUD_TOKEN="+c.token)
 
 	return cmd

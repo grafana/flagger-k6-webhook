@@ -1,8 +1,10 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/grafana/flagger-k6-webhook/pkg/handlers"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
@@ -14,8 +16,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, port int) error {
-	launchHandler, err := handlers.NewLaunchHandler(client, kubeClient, slackClient)
+func Listen(ctx context.Context, client k6.Client, kubeClient kubernetes.Interface, slackClient slack.Client, port int, maxProcessHandlers int) error {
+	launcherCtx, cancelLaunchCtx := context.WithCancel(ctx)
+	launchHandler, err := handlers.NewLaunchHandler(launcherCtx, client, kubeClient, slackClient, maxProcessHandlers)
+	defer func() {
+		logrus.Debug("shutting down launch handler")
+		cancelLaunchCtx()
+		launchHandler.Wait()
+	}()
 	if err != nil {
 		return err
 	}
@@ -23,10 +31,24 @@ func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack
 	serveAddress := fmt.Sprintf(":%d", port)
 	logrus.Info("starting server at " + serveAddress)
 
-	http.HandleFunc("/health", handlers.HandleHealth)
-	http.Handle("/metrics", promhttp.Handler())
+	mux := http.NewServeMux()
+	srv := http.Server{
+		Handler: mux,
+		Addr:    serveAddress,
+	}
 
-	http.Handle("/launch-test",
+	go func() {
+		<-ctx.Done()
+		cancelLaunchCtx()
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		_ = srv.Shutdown(timeoutCtx)
+	}()
+
+	mux.HandleFunc("/health", handlers.HandleHealth)
+	mux.Handle("/metrics", promhttp.Handler())
+
+	mux.Handle("/launch-test",
 		promhttp.InstrumentHandlerCounter(
 			promauto.NewCounterVec(
 				prometheus.CounterOpts{
@@ -39,5 +61,5 @@ func Listen(client k6.Client, kubeClient kubernetes.Interface, slackClient slack
 		),
 	)
 
-	return http.ListenAndServe(serveAddress, nil)
+	return srv.ListenAndServe()
 }
