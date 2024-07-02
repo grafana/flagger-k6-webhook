@@ -75,6 +75,18 @@ func (m *MockK6TestRun) EXPECT() *MockK6TestRunMockRecorder {
 	return m.recorder
 }
 
+// CleanupContext mocks base method.
+func (m *MockK6TestRun) CleanupContext() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CleanupContext")
+}
+
+// CleanupContext indicates an expected call of CleanupContext.
+func (mr *MockK6TestRunMockRecorder) CleanupContext() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CleanupContext", reflect.TypeOf((*MockK6TestRun)(nil).CleanupContext))
+}
+
 // ExecutionDuration mocks base method.
 func (m *MockK6TestRun) ExecutionDuration() time.Duration {
 	m.ctrl.T.Helper()
@@ -143,6 +155,18 @@ func (m *MockK6TestRun) PID() int {
 func (mr *MockK6TestRunMockRecorder) PID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PID", reflect.TypeOf((*MockK6TestRun)(nil).PID))
+}
+
+// SetCancelFunc mocks base method.
+func (m *MockK6TestRun) SetCancelFunc(arg0 context.CancelFunc) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetCancelFunc", arg0)
+}
+
+// SetCancelFunc indicates an expected call of SetCancelFunc.
+func (mr *MockK6TestRunMockRecorder) SetCancelFunc(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCancelFunc", reflect.TypeOf((*MockK6TestRun)(nil).SetCancelFunc), arg0)
 }
 
 // Wait mocks base method.

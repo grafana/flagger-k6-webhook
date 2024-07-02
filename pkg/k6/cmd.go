@@ -23,8 +23,9 @@ func NewLocalRunnerClient(token string) (Client, error) {
 
 type DefaultTestRun struct {
 	*exec.Cmd
-	startedAt time.Time
-	exitedAt  time.Time
+	startedAt     time.Time
+	exitedAt      time.Time
+	cancelContext context.CancelFunc
 }
 
 func (tr *DefaultTestRun) Start() error {
@@ -44,6 +45,12 @@ func (tr *DefaultTestRun) ExitCode() int {
 		return tr.Cmd.ProcessState.ExitCode()
 	}
 	return -1
+}
+
+func (tr *DefaultTestRun) CleanupContext() {
+	if tr.cancelContext != nil {
+		tr.cancelContext()
+	}
 }
 
 func (tr *DefaultTestRun) ExecutionDuration() time.Duration {
@@ -72,6 +79,10 @@ func (tr *DefaultTestRun) Exited() bool {
 		return tr.Cmd.ProcessState.Exited()
 	}
 	return false
+}
+
+func (tr *DefaultTestRun) SetCancelFunc(fn context.CancelFunc) {
+	tr.cancelContext = fn
 }
 
 func (c *LocalRunnerClient) Start(ctx context.Context, scriptContent string, upload bool, envVars map[string]string, outputWriter io.Writer) (TestRun, error) {
