@@ -671,6 +671,8 @@ func TestProcessHandler(t *testing.T) {
 			tr.EXPECT().Wait().Return(nil).Times(1)
 			tr.EXPECT().Exited().Return(true).AnyTimes()
 			tr.EXPECT().ExitCode().Return(0).AnyTimes()
+			tr.EXPECT().SetCancelFunc(gomock.Any()).Return().AnyTimes()
+			tr.EXPECT().CleanupContext().Return().AnyTimes()
 			tr.EXPECT().ExecutionDuration().Return(time.Minute).AnyTimes()
 			handler.registerProcessCleanup(tr)
 		}
@@ -773,6 +775,8 @@ func setupHandlerWithKubernetesObjects(t *testing.T, maxConcurrentTests int, exp
 	// value here:
 	testRun.EXPECT().ExecutionDuration().Return(time.Minute).AnyTimes()
 	testRun.EXPECT().ExitCode().Return(0).AnyTimes()
+	testRun.EXPECT().SetCancelFunc(gomock.Any()).Return().AnyTimes()
+	testRun.EXPECT().CleanupContext().Return().AnyTimes()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	handler, err := NewLaunchHandler(ctx, k6Client, kubeClient, slackClient, maxConcurrentTests)

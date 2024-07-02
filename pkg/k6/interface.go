@@ -19,4 +19,6 @@ type TestRun interface {
 	Exited() bool
 	ExitCode() int
 	ExecutionDuration() time.Duration
+	CleanupContext()
+	SetCancelFunc(context.CancelFunc)
 }

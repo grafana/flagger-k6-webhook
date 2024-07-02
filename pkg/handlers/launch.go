@@ -263,6 +263,9 @@ func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
 	h.trackExecutionDuration(cmd)
 	log.WithField("pid", pid).Debugf("testrun exited")
 
+	// Also clean up the context attached to this process if present:
+	cmd.CleanupContext()
+
 	h.availableTestRuns <- struct{}{}
 }
 
@@ -407,6 +410,9 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	cmd, err := h.client.Start(ctx, payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
 	if err != nil {
 		fail(fmt.Sprintf("error while launching the test: %v", err))
+		if !payload.Metadata.WaitForResults {
+			cancelCtx()
+		}
 		return
 	}
 
@@ -418,6 +424,9 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		logIfError(err)
 		logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
 		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
+		if !payload.Metadata.WaitForResults {
+			cancelCtx()
+		}
 		h.registerProcessCleanup(cmd)
 		return
 	}
@@ -426,6 +435,9 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		url, err := getCloudURL(buf.String())
 		if err != nil {
 			fail(err.Error())
+			if !payload.Metadata.WaitForResults {
+				cancelCtx()
+			}
 			h.registerProcessCleanup(cmd)
 			return
 		}
@@ -439,6 +451,10 @@ func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	if !payload.Metadata.WaitForResults {
 		cmdLog.Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
+		// We also need to register the cancelCtx func for asynchronous
+		// cleanup. In the synchronous cases we can cancel that context right
+		// away.
+		cmd.SetCancelFunc(cancelCtx)
 		h.registerProcessCleanup(cmd)
 		return
 	}
