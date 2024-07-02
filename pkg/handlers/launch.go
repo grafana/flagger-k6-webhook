@@ -486,7 +486,6 @@ func (h *launchHandler) propagateCancel(req *http.Request, payload *launchPayloa
 		<-h.ctx.Done()
 		cancelCtx()
 	}
-	log.Info("canceling process")
 }
 
 func (h *launchHandler) waitForOutputPath(cmdLog *log.Entry, buf *bytes.Buffer) error {
