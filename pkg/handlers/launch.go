@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -139,6 +137,9 @@ func (p *launchPayload) validate() error {
 	return nil
 }
 
+// launchHandler is responsible for receiving new requests and dispatching a
+// singleRequestHandler based on the received payload. It also keeps track of
+// all currently running processes.
 type launchHandler struct {
 	client      k6.Client
 	kubeClient  kubernetes.Interface
@@ -183,7 +184,7 @@ func NewLaunchHandler(ctx context.Context, client k6.Client, kubeClient kubernet
 	}
 	h.availableTestRuns = make(chan struct{}, maxConcurrentTests)
 	for range maxConcurrentTests {
-		h.availableTestRuns <- struct{}{}
+		h.releaseTestRun()
 	}
 
 	metricMaxConcurrentTests := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -266,7 +267,7 @@ func (h *launchHandler) waitForProcess(cmd k6.TestRun) {
 	// Also clean up the context attached to this process if present:
 	cmd.CleanupContext()
 
-	h.availableTestRuns <- struct{}{}
+	h.releaseTestRun()
 }
 
 // registerProcessCleanup adds a handler to the process so that it will
@@ -291,43 +292,6 @@ func (h *launchHandler) setLastFailureTime(payload *launchPayload) {
 	h.lastFailureTime[payload.key()] = time.Now()
 }
 
-func (h *launchHandler) buildEnvVars(payload *launchPayload) (map[string]string, error) {
-	envVars := payload.Metadata.EnvVars
-
-	if len(payload.Metadata.KubernetesSecrets) == 0 {
-		return envVars, nil
-	}
-
-	if h.kubeClient == nil {
-		return nil, errors.New("kubernetes client is not configured")
-	}
-
-	if envVars == nil {
-		envVars = make(map[string]string)
-	}
-
-	for env, secret := range payload.Metadata.KubernetesSecrets {
-		parts := strings.SplitN(secret, "/", 3)
-		namespace := payload.Namespace
-		if len(parts) > 2 {
-			namespace = parts[0]
-			parts = parts[1:]
-		}
-		secretName := parts[0]
-		secretKey := parts[1]
-		secret, err := h.kubeClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("error fetching secret %s/%s: %w", namespace, secretName, err)
-		}
-		if v, ok := secret.Data[secretKey]; ok {
-			envVars[env] = string(v)
-		} else {
-			return nil, fmt.Errorf("secret %s/%s does not have key %s", namespace, secretName, secretKey)
-		}
-	}
-	return envVars, nil
-}
-
 func (h *launchHandler) getWaitTime() int64 {
 	families, err := h.metricsRegistry.Gather()
 	if err != nil {
@@ -348,177 +312,30 @@ func (h *launchHandler) getWaitTime() int64 {
 	return 60
 }
 
-func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	cmdLog := createLogEntry(req)
+func (h *launchHandler) createSingleRequestHandler(resp http.ResponseWriter, req *http.Request) *singleRequestHandler {
+	return newSingleRequestHandler(resp, req, h)
+}
+
+func (h *launchHandler) requestTestRun() error {
 	select {
 	case <-h.availableTestRuns:
+		return nil
 	default:
-		cmdLog.Warn("Maximum concurrent test runs reached. Rejecting request.")
-		resp.Header().Set("Retry-After", fmt.Sprintf("%d", h.getWaitTime()))
-		http.Error(resp, "Maximum concurrent test runs reached", http.StatusTooManyRequests)
-		return
+		return fmt.Errorf("maximum concurrent test runs reached")
 	}
-	logIfError := func(err error) {
-		if err != nil {
-			cmdLog.Error(err)
-		}
-	}
+}
 
-	cmdLog.Info("parsing the request payload")
-	payload, err := newLaunchPayload(req)
-	if err != nil {
-		cmdLog.Error(err)
-		http.Error(resp, fmt.Sprintf("error while validating request: %v", err), 400)
-		return
-	}
+func (h *launchHandler) releaseTestRun() {
+	h.availableTestRuns <- struct{}{}
+}
 
-	// define the fail function
-	// this function returns a 400 status and saves the failure time (to avoid retries, if the user has configured to do so)
-	var buf bytes.Buffer
-	fail := func(message string) {
-		h.setLastFailureTime(payload)
-		cmdLog.Error(message)
-		if buf.Len() > 0 {
-			message += "\n" + buf.String()
-		}
-		http.Error(resp, message, 400)
-	}
-
-	if v, ok := h.getLastFailureTime(payload); ok && time.Since(v) < payload.Metadata.MinFailureDelay {
-		fail("not enough time since last failure")
-		return
-	}
-
-	cmdLog.Info("fetching secrets (if any)")
-	envVars, err := h.buildEnvVars(payload)
-	if err != nil {
-		fail(err.Error())
-		return
-	}
-
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer func() {
-		if payload.Metadata.WaitForResults {
-			cancelCtx()
-		}
-	}()
-	go func() {
-		h.propagateCancel(req, payload, cancelCtx)
-	}()
-
-	cmdLog.Info("launching k6 test")
-	cmd, err := h.client.Start(ctx, payload.Metadata.Script, payload.Metadata.UploadToCloud, envVars, &buf)
-	if err != nil {
-		fail(fmt.Sprintf("error while launching the test: %v", err))
-		if !payload.Metadata.WaitForResults {
-			cancelCtx()
-		}
-		return
-	}
-
-	cmdLog.Info("waiting for output path")
-	slackContext := payload.Metadata.NotificationContext
-	// Find the Cloud URL from the k6 output
-	if waitErr := h.waitForOutputPath(cmdLog, &buf); waitErr != nil {
-		slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiFailure, "didn't start successfully"), slackContext)
-		logIfError(err)
-		logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
-		fail(fmt.Sprintf("error while waiting for test to start: %v", waitErr))
-		if !payload.Metadata.WaitForResults {
-			cancelCtx()
-		}
-		h.registerProcessCleanup(cmd)
-		return
-	}
-
-	if payload.Metadata.UploadToCloud {
-		url, err := getCloudURL(buf.String())
-		if err != nil {
-			fail(err.Error())
-			if !payload.Metadata.WaitForResults {
-				cancelCtx()
-			}
-			h.registerProcessCleanup(cmd)
-			return
-		}
-		slackContext += fmt.Sprintf("\nCloud URL: <%s>", url)
-		cmdLog.Infof("cloud run URL: %s", url)
-	}
-
-	// Write the initial message to each channel
-	slackMessages, err := h.slackClient.SendMessages(payload.Metadata.SlackChannels, payload.statusMessage(emojiWarning, "has started"), slackContext)
-	logIfError(err)
-
-	if !payload.Metadata.WaitForResults {
-		cmdLog.Infof("the load test for %s.%s was launched successfully!", payload.Name, payload.Namespace)
-		// We also need to register the cancelCtx func for asynchronous
-		// cleanup. In the synchronous cases we can cancel that context right
-		// away.
-		cmd.SetCancelFunc(cancelCtx)
-		h.registerProcessCleanup(cmd)
-		return
-	}
-
-	// Wait for the test to finish and write the output to slack
-	defer func() {
-		h.availableTestRuns <- struct{}{}
-	}()
-	cmdLog.Info("waiting for the results")
-	err = cmd.Wait()
-	h.trackExecutionDuration(cmd)
-	logIfError(h.slackClient.AddFileToThreads(slackMessages, "k6-results.txt", buf.String()))
-
-	// Load testing failed, log the output
-	if err != nil {
-		logIfError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiFailure, "has failed"), slackContext))
-		fail(fmt.Sprintf("failed to run: %v", err))
-		return
-	}
-
-	// Success!
-	logIfError(h.slackClient.UpdateMessages(slackMessages, payload.statusMessage(emojiSuccess, "has succeeded"), slackContext))
-	_, err = resp.Write(buf.Bytes())
-	logIfError(err)
-	cmdLog.Infof("the load test for %s.%s succeeded!", payload.Name, payload.Namespace)
+func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	handler := h.createSingleRequestHandler(resp, req)
+	handler.Handle(req.Context())
 }
 
 func (h *launchHandler) trackExecutionDuration(cmd k6.TestRun) {
 	if dur := cmd.ExecutionDuration(); dur != 0 {
 		h.metricTestDuration.With(prometheus.Labels{"exit_code": fmt.Sprintf("%d", cmd.ExitCode())}).Observe(float64(dur / time.Second))
 	}
-}
-
-func (h *launchHandler) propagateCancel(req *http.Request, payload *launchPayload, cancelCtx context.CancelFunc) {
-	if payload.Metadata.WaitForResults {
-		select {
-		case <-req.Context().Done():
-			cancelCtx()
-		case <-h.ctx.Done():
-			cancelCtx()
-		}
-	} else {
-		// If we are not waiting for the results then we should only cancel
-		// if the global context is done:
-		<-h.ctx.Done()
-		cancelCtx()
-	}
-}
-
-func (h *launchHandler) waitForOutputPath(cmdLog *log.Entry, buf *bytes.Buffer) error {
-	for i := 0; i < 10; i++ {
-		if strings.Contains(buf.String(), "output:") {
-			return nil
-		}
-		cmdLog.Debug("waiting 2 seconds for test to start")
-		h.sleep(2 * time.Second)
-	}
-	return errors.New("timeout")
-}
-
-func getCloudURL(output string) (string, error) {
-	matches := outputRegex.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return "", errors.New("couldn't find the cloud URL in the output")
-	}
-	return matches[1], nil
 }

@@ -25,6 +25,4 @@ linters:
     - revive
 linters-settings:
   gocyclo:
-    # Original value: 15. Temporarily increased before a refactoring of
-    # launcher.ServeHTTP.
-    min-complexity: 18
+    min-complexity: 15
