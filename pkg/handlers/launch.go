@@ -312,10 +312,6 @@ func (h *launchHandler) getWaitTime() int64 {
 	return 60
 }
 
-func (h *launchHandler) createSingleRequestHandler(resp http.ResponseWriter, req *http.Request) *singleRequestHandler {
-	return newSingleRequestHandler(resp, req, h)
-}
-
 func (h *launchHandler) requestTestRun() error {
 	select {
 	case <-h.availableTestRuns:
@@ -330,7 +326,7 @@ func (h *launchHandler) releaseTestRun() {
 }
 
 func (h *launchHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	handler := h.createSingleRequestHandler(resp, req)
+	handler := newSingleRequestHandler(resp, req, h)
 	handler.Handle(req.Context())
 }
 
