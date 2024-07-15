@@ -12,7 +12,7 @@ env:
   REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
   TAG_CONFIG: |
     type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-    type=raw,value={{tag}},enable=${{ github.ref == 'refs/tags' && github.event_name == 'push' }}
+    type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/') && github.event_name == 'push' }}
     type=sha,enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
