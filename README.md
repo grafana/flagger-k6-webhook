@@ -90,3 +90,13 @@ helm upgrade -i k6-loadtester flagger-k6-webhook
 --set webhook.vars.K6_CLOUD_TOKEN=token
 --set webhook.vars.SLACK_TOKEN=slack_token
 ```
+
+## Limited concurrent test runs
+
+Whenever a k6 test is started, that process has to be managed by the application in order to avoid zombie processes.
+This requires additional resources and the number of parallel test runs is therefore limited.
+By default, that limit is set to 1,000 *parallel* k6 processes which can be configured using the `MAX_CONCURRENT_TESTS` environment variable or the `--max-concurrent-tests` flag.
+
+If a new test request is received while the limit is reached, the request will be rejected with a HTTP 429 status.
+The response also includes a `Retry-After` header that should be respected by the client.
+
