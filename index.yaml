@@ -4,6 +4,33 @@ entries:
   - annotations:
       artifacthub.io/changes: |-
         - kind: updated
+          description: Remove apiGroup for ServiceAccount RoleBinding subject
+        - kind: updated
+          description: Update appVersion to v0.3.1
+    apiVersion: v2
+    appVersion: v0.3.1
+    created: "2024-07-16T05:41:21.553625763Z"
+    description: Flagger webhook using k6 to do load testing of the canary before
+      rolling out traffic
+    digest: 7fb83ad967e6813cfc4cd8de5166dc4d6e6658178c53dbf9ffb90ef7f24360b5
+    home: https://github.com/grafana/flagger-k6-webhook
+    keywords:
+    - flagger
+    - canary
+    - webhook
+    - k6
+    maintainers:
+    - name: julienduchesne
+    name: k6-loadtester
+    sources:
+    - https://github.com/grafana/flagger-k6-webhook
+    type: application
+    urls:
+    - https://github.com/grafana/flagger-k6-webhook/releases/download/k6-loadtester-1.3.1/k6-loadtester-1.3.1.tgz
+    version: 1.3.1
+  - annotations:
+      artifacthub.io/changes: |-
+        - kind: updated
           description: Update appVersion to v0.2.0
     apiVersion: v2
     appVersion: v0.2.0
@@ -78,4 +105,4 @@ entries:
     urls:
     - https://github.com/grafana/flagger-k6-webhook/releases/download/k6-loadtester-1.0.1/k6-loadtester-1.0.1.tgz
     version: 1.0.1
-generated: "2023-10-05T03:06:08.365161197Z"
+generated: "2024-07-16T05:41:21.553642394Z"
