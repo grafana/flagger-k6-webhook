@@ -45,13 +45,13 @@ func (w *slackClientWrapper) UpdateMessages(slackMessages map[string]string, tex
 
 func (w *slackClientWrapper) AddFileToThreads(slackMessages map[string]string, fileName, content string) error {
 	for channelID, ts := range slackMessages {
-		fileParams := slack.FileUploadParameters{
+		fileParams := slack.UploadFileV2Parameters{
 			Title:           fileName,
 			Content:         content,
-			Channels:        []string{channelID},
+			Channel:         channelID,
 			ThreadTimestamp: ts,
 		}
-		if _, err := w.client.UploadFile(fileParams); err != nil {
+		if _, err := w.client.UploadFileV2(fileParams); err != nil {
 			return fmt.Errorf("error while uploading output to %s in slack channel %s: %w", ts, channelID, err)
 		}
 	}
