@@ -10,5 +10,5 @@ FROM alpine:3.20
 COPY --from=build /app/flagger-k6-webhook /usr/bin/flagger-k6-webhook
 COPY --from=grafana/k6 /usr/bin/k6 /usr/bin/k6
 
-ENTRYPOINT /usr/bin/flagger-k6-webhook
+ENTRYPOINT ["/usr/bin/flagger-k6-webhook"]
 USER 65534
