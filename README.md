@@ -100,3 +100,28 @@ By default, that limit is set to 1,000 *parallel* k6 processes which can be conf
 If a new test request is received while the limit is reached, the request will be rejected with a HTTP 429 status.
 The response also includes a `Retry-After` header that should be respected by the client.
 
+## Local development
+
+For local development we also ship a [Tiltfile](https://tilt.dev) so that, combined with [kind][] and [ctrptl][], you can test many scenarios locally:
+
+```
+# Prepare a demo host
+sudo echo "127.0.0.1  demo.localhost" >> /etc/hosts
+
+# Copy the provided dummy workload to the setup
+cp dev-workload.dist.yml dev-workload.yml
+
+# Create a kind cluster
+ctlptl create cluster kind --registry=ctlptl-registry
+
+# Start up tilt
+tilt up
+```
+
+This will set up Traefik as gateway and export the port 8080.
+After a short while you should see a standard nginx start page when curling `http://demo.local:8080`.
+
+The easiest way to now test a canary is to update the nginx version in the dev workload.
+
+[kind]: https://kind.sigs.k8s.io/
+[ctlptl]: https://github.com/tilt-dev/ctlptl

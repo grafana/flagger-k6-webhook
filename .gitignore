@@ -6,3 +6,7 @@ flagger-k6-webhook
 
 # CI
 .drone/temp.yml
+
+# Tilt setup
+.cache
+dev-workload.yml

@@ -1,0 +1,54 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: main
+          image: "nginx:1.27.1-alpine"
+          ports:
+            - containerPort: 80
+---
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: my-app
+spec:
+  analysis:
+    alerts: []
+    interval: 30s
+    iterations: 1
+    threshold: 2
+    webhooks:
+    - metadata:
+        notification_context: 'Cluster: `dev-cluster`'
+        script: |
+          import http from 'k6/http';
+          export default function () {
+            http.get('http://my-app-canary.default:80/');
+          }
+      name: k6-load-test
+      timeout: 5m
+      type: pre-rollout
+      url: http://chart-k6-loadtester.default:8000/launch-test
+  service:
+    name: my-app-svc
+    port: 80
+    portDiscovery: true
+    targetPort: 80
+    gatewayRefs:
+      - name: traefik-gateway
+        namespace: default
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
