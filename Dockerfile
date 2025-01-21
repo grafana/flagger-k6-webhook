@@ -3,7 +3,7 @@ FROM golang:1.23.4-alpine AS build
 RUN mkdir /app
 WORKDIR /app
 COPY . /app/
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-static"' -o /app/flagger-k6-webhook cmd/main.go
+RUN --mount=type=cache,target=/go/pkg/mod CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-static"' -o /app/flagger-k6-webhook cmd/main.go
 
 FROM alpine:3.21
 
