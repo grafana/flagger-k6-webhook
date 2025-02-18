@@ -4,12 +4,12 @@ run:
 linters:
   enable:
     - bodyclose
+    - copyloopvar
     - dogsled
     - dupl
     - durationcheck
     - errname
     - errorlint
-    - exportloopref
     - forbidigo
     - gci
     - goconst
