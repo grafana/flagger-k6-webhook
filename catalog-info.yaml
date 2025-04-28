@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: flagger-k6-webhook
+  title: flagger-k6-webhook
+  description: "Use k6 with Flagger"
+  tags:
+    - opensource
+  annotations:
+    github.com/project-slug: grafana/flagger-k6-webhook
+spec:
+  type: application
+  owner: group:platform-productivity
+  lifecycle: production
