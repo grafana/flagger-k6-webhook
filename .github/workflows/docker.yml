@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: read
+
 env:
   REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
   TAG_CONFIG: |
@@ -16,8 +20,9 @@ env:
     type=sha,enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # We create a docker image per platform in this first step:
   build:
+    permissions:
+      packages: write
     strategy:
       fail-fast: false
       # Based on
@@ -48,6 +53,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          persist-credentials: false
           # Workaround for https://github.com/actions/checkout/issues/1467 as the
           # project is not that large:
           fetch-depth: 0
@@ -79,8 +85,8 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"          
+          digest="$(echo "${{ steps.build.outputs.digest }}" | sed 's/[^a-f0-9:]//g')"
+          touch "/tmp/digests/${digest#sha256:}" 
           echo "artifact_name=digests-${{ matrix.platform }}" | sed -e 's/\//-/g' >> "$GITHUB_OUTPUT"
 
       - name: Upload digest
@@ -93,6 +99,8 @@ jobs:
           retention-days: 1
 
   merge:
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     needs:
@@ -141,4 +149,5 @@ jobs:
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          version="$(echo "${{ steps.meta.outputs.version }}" | sed 's/[^a-zA-Z0-9._\/-]//g')"
+          docker buildx imagetools inspect "${{ env.REGISTRY_IMAGE }}:$version"
