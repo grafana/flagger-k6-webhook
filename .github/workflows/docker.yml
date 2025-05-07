@@ -1,6 +1,7 @@
 name: Docker
 
 on:
+  merge_group:
   pull_request:
   push:
     tags:
@@ -82,10 +83,11 @@ jobs:
       - name: Export digest
         id: digest
         if: github.event_name != 'pull_request'
-        run: | # zizmor: ignore[template-injection] docker/build-push-action output
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"          
+          touch "/tmp/digests/${DIGEST#sha256:}"
           echo "artifact_name=digests-${{ matrix.platform }}" | sed -e 's/\//-/g' >> "$GITHUB_OUTPUT"
 
       - name: Upload digest
