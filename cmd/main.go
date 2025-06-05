@@ -10,6 +10,9 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
+	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
+	"github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"k8s.io/client-go/kubernetes"
@@ -87,6 +90,12 @@ func launchServer(c *cli.Context) error {
 		return err
 	}
 	log.SetLevel(logLevel)
+
+	log.Info("Version ", version.Info())
+	log.Info("Build Context ", version.BuildContext())
+	if err := prometheus.Register(versioncollector.NewCollector("flagger_k6_webhook")); err != nil {
+		return err
+	}
 
 	client, err := k6.NewLocalRunnerClient(c.String(flagCloudToken))
 	if err != nil {
