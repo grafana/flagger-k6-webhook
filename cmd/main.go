@@ -10,6 +10,9 @@ import (
 	"github.com/grafana/flagger-k6-webhook/pkg"
 	"github.com/grafana/flagger-k6-webhook/pkg/k6"
 	"github.com/grafana/flagger-k6-webhook/pkg/slack"
+	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
+	"github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"k8s.io/client-go/kubernetes"
@@ -26,6 +29,7 @@ const (
 	flagSlackToken         = "slack-token"
 	flagKubernetesClient   = "kubernetes-client"
 	flagMaxConcurrentTests = "max-concurrent-tests"
+	flagVersion            = "version"
 
 	kubernetesClientNone      = "none"
 	kubernetesClientInCluster = "in-cluster"
@@ -75,12 +79,25 @@ func run(args []string) error {
 			EnvVars: []string{"MAX_CONCURRENT_TESTS"},
 			Value:   defaultMaxConcurrentTests,
 		},
+		&cli.BoolFlag{
+			Name:  flagVersion,
+			Value: false,
+		},
 	}
 
 	return app.RunContext(ctx, args)
 }
 
 func launchServer(c *cli.Context) error {
+	log.Info("Version ", version.Info())
+	log.Info("Build Context ", version.BuildContext())
+	if err := prometheus.Register(versioncollector.NewCollector("flagger_k6_webhook")); err != nil {
+		return err
+	}
+	if c.Bool(flagVersion) {
+		return nil
+	}
+
 	ctx := c.Context
 	logLevel, err := log.ParseLevel(c.String(flagLogLevel))
 	if err != nil {

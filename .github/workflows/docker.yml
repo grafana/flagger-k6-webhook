@@ -51,6 +51,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout Repository
+        id: checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # Workaround for https://github.com/actions/checkout/issues/1467 as the
@@ -63,6 +64,17 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Get version
+        id: version
+        env:
+          GIT_REF_TYPE: "${{ github.ref_type }}"
+        run: |
+          if [[ "$GIT_REF_TYPE" == "tag" ]]; then
+            echo "binary_version=$(git describe --tags --abbrev=0 --match 'v*')" >> "${GITHUB_OUTPUT}"
+          else
+            echo "binary_version=$(git describe --tags --match 'v*')" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -78,7 +90,15 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          outputs: |
+            type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+            type=docker,name=testimage
+          build-args: |
+            GO_LDFLAGS=-X github.com/prometheus/common/version.Revision=${{ steps.checkout.outputs.commit }} -X github.com/prometheus/common/version.Version=${{ steps.version.outputs.binary_version }}
+
+      - name: Print binary version
+        run: |
+          docker run --rm "testimage:latest" --version
 
       - name: Export digest
         id: digest
