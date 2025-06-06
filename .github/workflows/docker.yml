@@ -65,6 +65,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
+      - name: Get version
+        id: version
+        env:
+          GIT_REF_TYPE: "${{ github.ref_type }}"
+        run: |
+          if [[ "$GIT_REF_TYPE" == "tag" ]]; then
+            echo "binary_version=$(git describe --tags --abbrev=0 --match 'v*')" >> "${GITHUB_OUTPUT}"
+          else
+            echo "binary_version=$(git describe --tags --match 'v*')" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
@@ -81,7 +92,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
           build-args: |
-            GO_LDFLAGS=-X github.com/prometheus/common/version.Revision=${{ steps.checkout.outputs.commit }} -X github.com/prometheus/common/version.Version=${{ github.ref_type == 'tag' && github.ref_name || '' }}
+            GO_LDFLAGS=-X github.com/prometheus/common/version.Revision=${{ steps.checkout.outputs.commit }} -X github.com/prometheus/common/version.Version=${{ steps.version.outputs.binary_version }}
 
       - name: Export digest
         id: digest
