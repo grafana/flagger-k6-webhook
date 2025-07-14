@@ -2,7 +2,7 @@ module github.com/grafana/flagger-k6-webhook
 
 go 1.24.0
 
-toolchain go1.24.2
+toolchain go1.24.5
 
 require (
 	github.com/golang/mock v1.6.0
@@ -10,7 +10,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/common v0.65.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/slack-go/slack v0.17.2
+	github.com/slack-go/slack v0.17.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
 	k8s.io/api v0.33.2
