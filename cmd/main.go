@@ -14,7 +14,7 @@ import (
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -44,7 +44,7 @@ func main() {
 func run(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	app := cli.NewApp()
+	app := cli.Command{}
 	app.Name = "flagger-k6-webhook"
 	app.Usage = "Launches k6 load testing from a flagger webhook"
 	app.Action = launchServer
@@ -52,31 +52,31 @@ func run(args []string) error {
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    flagCloudToken,
-			EnvVars: []string{"K6_CLOUD_TOKEN"},
+			Sources: cli.EnvVars("K6_CLOUD_TOKEN"),
 		},
 		&cli.IntFlag{
 			Name:    flagListenPort,
-			EnvVars: []string{"LISTEN_PORT"},
+			Sources: cli.EnvVars("LISTEN_PORT"),
 			Value:   defaultPort,
 		},
 		&cli.StringFlag{
 			Name:    flagLogLevel,
-			EnvVars: []string{"LOG_LEVEL"},
+			Sources: cli.EnvVars("LOG_LEVEL"),
 			Value:   log.InfoLevel.String(),
 		},
 		&cli.StringFlag{
 			Name:    flagSlackToken,
-			EnvVars: []string{"SLACK_TOKEN"},
+			Sources: cli.EnvVars("SLACK_TOKEN"),
 		},
 		&cli.StringFlag{
 			Name:    flagKubernetesClient,
-			EnvVars: []string{"KUBERNETES_CLIENT"},
+			Sources: cli.EnvVars("KUBERNETES_CLIENT"),
 			Value:   kubernetesClientNone,
 			Usage:   fmt.Sprintf("Kubernetes client to use: '%s' or '%s'", kubernetesClientInCluster, kubernetesClientNone),
 		},
 		&cli.IntFlag{
 			Name:    flagMaxConcurrentTests,
-			EnvVars: []string{"MAX_CONCURRENT_TESTS"},
+			Sources: cli.EnvVars("MAX_CONCURRENT_TESTS"),
 			Value:   defaultMaxConcurrentTests,
 		},
 		&cli.BoolFlag{
@@ -85,10 +85,10 @@ func run(args []string) error {
 		},
 	}
 
-	return app.RunContext(ctx, args)
+	return app.Run(ctx, args)
 }
 
-func launchServer(c *cli.Context) error {
+func launchServer(ctx context.Context, c *cli.Command) error {
 	log.Info("Version ", version.Info())
 	log.Info("Build Context ", version.BuildContext())
 	if err := prometheus.Register(versioncollector.NewCollector("flagger_k6_webhook")); err != nil {
@@ -98,7 +98,6 @@ func launchServer(c *cli.Context) error {
 		return nil
 	}
 
-	ctx := c.Context
 	logLevel, err := log.ParseLevel(c.String(flagLogLevel))
 	if err != nil {
 		return err
