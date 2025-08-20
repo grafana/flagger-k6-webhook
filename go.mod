@@ -13,9 +13,9 @@ require (
 	github.com/slack-go/slack v0.17.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v3 v3.4.1
-	k8s.io/api v0.33.3
-	k8s.io/apimachinery v0.33.3
-	k8s.io/client-go v0.33.3
+	k8s.io/api v0.33.4
+	k8s.io/apimachinery v0.33.4
+	k8s.io/client-go v0.33.4
 )
 
 require (
