@@ -1,0 +1,11 @@
+{
+  "packageRules": [
+    {
+      "groupName": "k8s",
+      "groupSlug": "k8s",
+      "matchPackageNames": [
+        "k8s.io/**"
+      ]
+    }
+  ]
+}
