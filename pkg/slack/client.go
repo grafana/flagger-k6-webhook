@@ -50,9 +50,11 @@ func (w *slackClientWrapper) AddFileToThreads(slackMessages map[string]string, f
 			Content:         content,
 			Channel:         channelID,
 			ThreadTimestamp: ts,
+			Filename:        fileName,
+			FileSize:        len(content), // the size (in bytes) of the file being uploaded
 		}
 		if _, err := w.client.UploadFileV2(fileParams); err != nil {
-			return fmt.Errorf("error while uploading output to %s in slack channel %s: %w", ts, channelID, err)
+			return fmt.Errorf("error while uploading output %s in slack channel %s: %w", fileName, channelID, err)
 		}
 	}
 
