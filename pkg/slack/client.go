@@ -10,13 +10,18 @@ type slackClientWrapper struct {
 	client *slack.Client
 }
 
-func NewClient(token string) Client {
+func NewClient(token string, apiURL string) Client {
 	if token == "" {
 		return &noopClient{}
 	}
 
+	opts := []slack.Option{}
+	if apiURL != "" {
+		opts = append(opts, slack.OptionAPIURL(apiURL))
+	}
+
 	return &slackClientWrapper{
-		client: slack.New(token),
+		client: slack.New(token, opts...),
 	}
 }
 

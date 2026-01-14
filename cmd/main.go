@@ -26,6 +26,7 @@ const (
 	flagCloudToken         = "cloud-token"
 	flagLogLevel           = "log-level"
 	flagListenPort         = "listen-port"
+	flagSlackAPIURL        = "slack-api-url"
 	flagSlackToken         = "slack-token"
 	flagKubernetesClient   = "kubernetes-client"
 	flagMaxConcurrentTests = "max-concurrent-tests"
@@ -69,6 +70,11 @@ func run(args []string) error {
 			Sources: cli.EnvVars("SLACK_TOKEN"),
 		},
 		&cli.StringFlag{
+			Name:    flagSlackAPIURL,
+			Sources: cli.EnvVars("SLACK_API_URL"),
+			Usage:   "URL of custom Slack API endpoint",
+		},
+		&cli.StringFlag{
 			Name:    flagKubernetesClient,
 			Sources: cli.EnvVars("KUBERNETES_CLIENT"),
 			Value:   kubernetesClientNone,
@@ -108,7 +114,7 @@ func launchServer(ctx context.Context, c *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	slackClient := slack.NewClient(c.String(flagSlackToken))
+	slackClient := slack.NewClient(c.String(flagSlackToken), c.String(flagSlackAPIURL))
 
 	var kubeClient kubernetes.Interface
 	if c.String(flagKubernetesClient) == kubernetesClientInCluster {
