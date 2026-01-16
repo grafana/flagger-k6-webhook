@@ -4,6 +4,31 @@ entries:
   - annotations:
       artifacthub.io/changes: |-
         - kind: updated
+          description: Update appVersion to v0.5.0
+    apiVersion: v2
+    appVersion: v0.5.0
+    created: "2026-01-16T10:50:51.153517864Z"
+    description: Flagger webhook using k6 to do load testing of the canary before
+      rolling out traffic
+    digest: b2c0795ca713c3194390d2c5af5a1fa20e4373e1a4dcfbb43515dcc7410a8f85
+    home: https://github.com/grafana/flagger-k6-webhook
+    keywords:
+    - flagger
+    - canary
+    - webhook
+    - k6
+    maintainers:
+    - name: julienduchesne
+    name: k6-loadtester
+    sources:
+    - https://github.com/grafana/flagger-k6-webhook
+    type: application
+    urls:
+    - https://github.com/grafana/flagger-k6-webhook/releases/download/k6-loadtester-1.5.0/k6-loadtester-1.5.0.tgz
+    version: 1.5.0
+  - annotations:
+      artifacthub.io/changes: |-
+        - kind: updated
           description: Update appVersion to v0.4.1
     apiVersion: v2
     appVersion: v0.4.1
@@ -205,4 +230,4 @@ entries:
     urls:
     - https://github.com/grafana/flagger-k6-webhook/releases/download/k6-loadtester-1.0.1/k6-loadtester-1.0.1.tgz
     version: 1.0.1
-generated: "2025-11-19T00:08:38.021332639Z"
+generated: "2026-01-16T10:50:51.153561114Z"
