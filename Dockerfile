@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/go/pkg/mod CGO_ENABLED=0 GOOS=linux go build -ldf
 FROM alpine:3.23@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 
 COPY --from=build /app/flagger-k6-webhook /usr/bin/flagger-k6-webhook
-COPY --from=grafana/k6@sha256:82e44a45a38ed22bf5636fe50fe8a07967c3074f7aa66567c6a7501ab9bb3a9f /usr/bin/k6 /usr/bin/k6
+COPY --from=grafana/k6:1.7.1@sha256:4fd3a694926b064d3491d9b02b01cde886583c4931f1223816e3d9a7bdfa7e0f /usr/bin/k6 /usr/bin/k6
 
 ENTRYPOINT ["/usr/bin/flagger-k6-webhook"]
 USER 65534
