@@ -175,3 +175,17 @@ jobs:
           RELEASE_VERSION: "${{ steps.meta.outputs.version }}"
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${RELEASE_VERSION}
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - merge
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "${TAG}" --generate-notes --repo "${GITHUB_REPOSITORY}"
