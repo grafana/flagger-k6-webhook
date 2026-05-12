@@ -1,9 +1,9 @@
 name: Auto Release Chart
 
 on:
-  workflow_run:
-    workflows: ["Docker"]
-    types: [completed]
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -12,21 +12,12 @@ permissions:
 jobs:
   auto-release-chart:
     runs-on: ubuntu-latest
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Determine tag
-        id: tag
-        run: |
-          TAG="${{ github.event.workflow_run.head_branch }}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Read current chart version
         id: current
@@ -39,11 +30,12 @@ jobs:
       - name: Check if update is needed
         id: check
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ github.ref_name }}
           APP_VERSION: ${{ steps.current.outputs.app_version }}
         run: |
-          if [[ "${TAG}" == "${APP_VERSION}" ]]; then
-            echo "Chart already at ${TAG}, skipping"
+          HIGHEST=$(printf '%s\n' "${TAG}" "${APP_VERSION}" | sort -V | tail -1)
+          if [[ "${HIGHEST}" != "${TAG}" || "${TAG}" == "${APP_VERSION}" ]]; then
+            echo "Tag ${TAG} is not newer than ${APP_VERSION}, skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -55,9 +47,8 @@ jobs:
         env:
           CHART_VERSION: ${{ steps.current.outputs.chart_version }}
           OLD_APP_VERSION: ${{ steps.current.outputs.app_version }}
-          NEW_APP_VERSION: ${{ steps.tag.outputs.tag }}
+          NEW_APP_VERSION: ${{ github.ref_name }}
         run: |
-          # Strip leading 'v' for comparison
           OLD="${OLD_APP_VERSION#v}"
           NEW="${NEW_APP_VERSION#v}"
 
@@ -78,7 +69,7 @@ jobs:
       - name: Update Chart.yaml
         if: steps.check.outputs.skip == 'false'
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ github.ref_name }}
           NEW_VERSION: ${{ steps.new-version.outputs.chart_version }}
         run: |
           yq -i ".version = \"${NEW_VERSION}\"" charts/k6-loadtester/Chart.yaml
@@ -97,14 +88,14 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
-          commit-message: "chore: update chart to ${{ steps.tag.outputs.tag }}"
-          title: "chore: release chart for ${{ steps.tag.outputs.tag }}"
+          commit-message: "chore: update chart to ${{ github.ref_name }}"
+          title: "chore: release chart for ${{ github.ref_name }}"
           body: |
-            Automated PR to update the Helm chart for release ${{ steps.tag.outputs.tag }}.
+            Automated PR to update the Helm chart for release ${{ github.ref_name }}.
 
-            - Updates `appVersion` to `${{ steps.tag.outputs.tag }}`
+            - Updates `appVersion` to `${{ github.ref_name }}`
             - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
-          branch: auto-release-chart/${{ steps.tag.outputs.tag }}
+          branch: auto-release-chart/${{ github.ref_name }}
           base: main
           labels: |
             automated
