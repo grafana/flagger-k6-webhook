@@ -1,0 +1,110 @@
+name: Auto Release Chart
+
+on:
+  workflow_run:
+    workflows: ["Docker"]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  auto-release-chart:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Determine tag
+        id: tag
+        run: |
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Read current chart version
+        id: current
+        run: |
+          CHART_VERSION=$(yq '.version' charts/k6-loadtester/Chart.yaml)
+          APP_VERSION=$(yq '.appVersion' charts/k6-loadtester/Chart.yaml)
+          echo "chart_version=${CHART_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if update is needed
+        id: check
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          APP_VERSION: ${{ steps.current.outputs.app_version }}
+        run: |
+          if [[ "${TAG}" == "${APP_VERSION}" ]]; then
+            echo "Chart already at ${TAG}, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Calculate new chart version
+        if: steps.check.outputs.skip == 'false'
+        id: new-version
+        env:
+          CHART_VERSION: ${{ steps.current.outputs.chart_version }}
+          OLD_APP_VERSION: ${{ steps.current.outputs.app_version }}
+          NEW_APP_VERSION: ${{ steps.tag.outputs.tag }}
+        run: |
+          # Strip leading 'v' for comparison
+          OLD="${OLD_APP_VERSION#v}"
+          NEW="${NEW_APP_VERSION#v}"
+
+          IFS='.' read -r old_major old_minor old_patch <<< "${OLD}"
+          IFS='.' read -r new_major new_minor new_patch <<< "${NEW}"
+          IFS='.' read -r chart_major chart_minor chart_patch <<< "${CHART_VERSION}"
+
+          if [[ "${new_major}" -gt "${old_major}" ]]; then
+            NEW_CHART_VERSION="$((chart_major + 1)).0.0"
+          elif [[ "${new_minor}" -gt "${old_minor}" ]]; then
+            NEW_CHART_VERSION="${chart_major}.$((chart_minor + 1)).0"
+          else
+            NEW_CHART_VERSION="${chart_major}.${chart_minor}.$((chart_patch + 1))"
+          fi
+
+          echo "chart_version=${NEW_CHART_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Chart.yaml
+        if: steps.check.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          NEW_VERSION: ${{ steps.new-version.outputs.chart_version }}
+        run: |
+          yq -i ".version = \"${NEW_VERSION}\"" charts/k6-loadtester/Chart.yaml
+          yq -i ".appVersion = \"${TAG}\"" charts/k6-loadtester/Chart.yaml
+          yq -i ".annotations.\"artifacthub.io/changes\" = \"- kind: updated\n  description: Update appVersion to ${TAG}\"" charts/k6-loadtester/Chart.yaml
+
+      - name: Get GitHub App token
+        if: steps.check.outputs.skip == 'false'
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@259ba21cb3ff07724f331e26d926d655d24b317b # create-github-app-token/v0.2.3
+        with:
+          github_app: grafana-flagger-k6-releaser
+
+      - name: Create Pull Request
+        if: steps.check.outputs.skip == 'false'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.get-github-app-token.outputs.token }}
+          commit-message: "chore: update chart to ${{ steps.tag.outputs.tag }}"
+          title: "chore: release chart for ${{ steps.tag.outputs.tag }}"
+          body: |
+            Automated PR to update the Helm chart for release ${{ steps.tag.outputs.tag }}.
+
+            - Updates `appVersion` to `${{ steps.tag.outputs.tag }}`
+            - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
+          branch: auto-release-chart/${{ steps.tag.outputs.tag }}
+          base: main
+          labels: |
+            automated
