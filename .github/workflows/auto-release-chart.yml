@@ -23,8 +23,8 @@ jobs:
       - name: Set up crane
         uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
 
-      - name: Get latest image tag
-        id: latest
+      - name: Get newest semver image tag
+        id: newest-semver-image
         env:
           REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
         run: |
@@ -42,7 +42,7 @@ jobs:
       - name: Check if update is needed
         id: check
         env:
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.newest-semver-image.outputs.tag }}
           APP_VERSION: ${{ steps.current.outputs.app_version }}
         run: |
           if [[ -z "${TAG}" ]]; then
@@ -64,7 +64,7 @@ jobs:
         env:
           CHART_VERSION: ${{ steps.current.outputs.chart_version }}
           OLD_APP_VERSION: ${{ steps.current.outputs.app_version }}
-          NEW_APP_VERSION: ${{ steps.latest.outputs.tag }}
+          NEW_APP_VERSION: ${{ steps.newest-semver-image.outputs.tag }}
         run: |
           OLD="${OLD_APP_VERSION#v}"
           NEW="${NEW_APP_VERSION#v}"
@@ -86,7 +86,7 @@ jobs:
       - name: Update Chart.yaml
         if: steps.check.outputs.skip == 'false'
         env:
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.newest-semver-image.outputs.tag }}
           NEW_VERSION: ${{ steps.new-version.outputs.chart_version }}
         run: |
           yq -i ".version = \"${NEW_VERSION}\"" charts/k6-loadtester/Chart.yaml
@@ -105,14 +105,14 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
-          commit-message: "chore: update chart to ${{ steps.latest.outputs.tag }}"
-          title: "chore: release chart for ${{ steps.latest.outputs.tag }}"
+          commit-message: "chore: update chart to ${{ steps.newest-semver-image.outputs.tag }}"
+          title: "chore: release chart for ${{ steps.newest-semver-image.outputs.tag }}"
           body: |
             Automated PR to update the Helm chart for the latest released image.
 
-            - Updates `appVersion` to `${{ steps.latest.outputs.tag }}`
+            - Updates `appVersion` to `${{ steps.newest-semver-image.outputs.tag }}`
             - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
-          branch: auto-release-chart/${{ steps.latest.outputs.tag }}
+          branch: auto-release-chart/${{ steps.newest-semver-image.outputs.tag }}
           base: main
           labels: |
             automated
