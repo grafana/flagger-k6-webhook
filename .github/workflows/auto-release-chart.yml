@@ -1,13 +1,14 @@
 name: Auto Release Chart
 
 on:
-  push:
-    tags:
-      - "v*"
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
+  packages: read
 
 jobs:
   auto-release-chart:
@@ -18,6 +19,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Set up crane
+        uses: imjasonh/setup-crane@6da1ae018866400525525ce74ff892880c099987 # v0.5
+
+      - name: Get newest semver image tag
+        id: newest-semver-image
+        env:
+          REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
+        run: |
+          TAG=$(crane ls "${REGISTRY_IMAGE}" | grep '^v' | sort -V | tail -1)
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Read current chart version
         id: current
@@ -30,9 +42,14 @@ jobs:
       - name: Check if update is needed
         id: check
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.newest-semver-image.outputs.tag }}
           APP_VERSION: ${{ steps.current.outputs.app_version }}
         run: |
+          if [[ -z "${TAG}" ]]; then
+            echo "No version tags found in registry, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           HIGHEST=$(printf '%s\n' "${TAG}" "${APP_VERSION}" | sort -V | tail -1)
           if [[ "${HIGHEST}" != "${TAG}" || "${TAG}" == "${APP_VERSION}" ]]; then
             echo "Tag ${TAG} is not newer than ${APP_VERSION}, skipping"
@@ -47,7 +64,7 @@ jobs:
         env:
           CHART_VERSION: ${{ steps.current.outputs.chart_version }}
           OLD_APP_VERSION: ${{ steps.current.outputs.app_version }}
-          NEW_APP_VERSION: ${{ github.ref_name }}
+          NEW_APP_VERSION: ${{ steps.newest-semver-image.outputs.tag }}
         run: |
           OLD="${OLD_APP_VERSION#v}"
           NEW="${NEW_APP_VERSION#v}"
@@ -69,7 +86,7 @@ jobs:
       - name: Update Chart.yaml
         if: steps.check.outputs.skip == 'false'
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.newest-semver-image.outputs.tag }}
           NEW_VERSION: ${{ steps.new-version.outputs.chart_version }}
         run: |
           yq -i ".version = \"${NEW_VERSION}\"" charts/k6-loadtester/Chart.yaml
@@ -88,14 +105,14 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
-          commit-message: "chore: update chart to ${{ github.ref_name }}"
-          title: "chore: release chart for ${{ github.ref_name }}"
+          commit-message: "chore: update chart to ${{ steps.newest-semver-image.outputs.tag }}"
+          title: "chore: release chart for ${{ steps.newest-semver-image.outputs.tag }}"
           body: |
-            Automated PR to update the Helm chart for release ${{ github.ref_name }}.
+            Automated PR to update the Helm chart for the latest released image.
 
-            - Updates `appVersion` to `${{ github.ref_name }}`
+            - Updates `appVersion` to `${{ steps.newest-semver-image.outputs.tag }}`
             - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
-          branch: auto-release-chart/${{ github.ref_name }}
+          branch: auto-release-chart/${{ steps.newest-semver-image.outputs.tag }}
           base: main
           labels: |
             automated
