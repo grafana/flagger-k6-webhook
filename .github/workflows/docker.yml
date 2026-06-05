@@ -4,16 +4,20 @@ on:
   merge_group:
   pull_request:
   push:
-    tags:
-      - "*"
     branches:
       - main
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
 
 env:
   REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
   TAG_CONFIG: |
-    type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-    type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/') && github.event_name == 'push' }}
+    type=raw,value=latest,enable=${{ inputs.tag != '' }}
+    type=semver,pattern={{version}},value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+    type=sha,prefix={{branch}}-,format=short,enable=${{ github.ref == 'refs/heads/main' && inputs.tag == '' }}
     type=sha,enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -175,17 +179,3 @@ jobs:
           RELEASE_VERSION: "${{ steps.meta.outputs.version }}"
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${RELEASE_VERSION}
-
-  release:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs:
-      - merge
-    permissions:
-      contents: write
-    steps:
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create "${TAG}" --generate-notes --repo "${GITHUB_REPOSITORY}"
