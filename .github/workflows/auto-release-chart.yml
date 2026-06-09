@@ -112,6 +112,7 @@ jobs:
 
             - Updates `appVersion` to `${{ steps.newest-semver-image.outputs.tag }}`
             - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
+          add-paths: charts/
           branch: auto-release-chart/${{ steps.newest-semver-image.outputs.tag }}
           base: main
           labels: |
