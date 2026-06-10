@@ -4,16 +4,19 @@ on:
   merge_group:
   pull_request:
   push:
-    tags:
-      - "*"
     branches:
       - main
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
 
 env:
   REGISTRY_IMAGE: ghcr.io/grafana/flagger-k6-webhook
   TAG_CONFIG: |
-    type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-    type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/') && github.event_name == 'push' }}
+    type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && inputs.tag == '' }}
+    type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
     type=sha,enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -52,7 +55,7 @@ jobs:
 
       - name: Checkout Repository
         id: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           # Workaround for https://github.com/actions/checkout/issues/1467 as the
           # project is not that large:
@@ -175,17 +178,3 @@ jobs:
           RELEASE_VERSION: "${{ steps.meta.outputs.version }}"
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${RELEASE_VERSION}
-
-  release:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs:
-      - merge
-    permissions:
-      contents: write
-    steps:
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create "${TAG}" --generate-notes --repo "${GITHUB_REPOSITORY}"
