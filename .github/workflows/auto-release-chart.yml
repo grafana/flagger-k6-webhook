@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up crane
-        uses: imjasonh/setup-crane@6da1ae018866400525525ce74ff892880c099987 # v0.5
+        uses: imjasonh/setup-crane@59c71e96a00b28651f10369ba3359a6d730740a0 # v0.6
 
       - name: Get newest semver image tag
         id: newest-semver-image
@@ -96,7 +96,7 @@ jobs:
       - name: Get GitHub App token
         if: steps.check.outputs.skip == 'false'
         id: get-github-app-token
-        uses: grafana/shared-workflows/actions/create-github-app-token@795f748a236f9de024b7514efc9a208456e7e468 # create-github-app-token/v0.3.0
+        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
         with:
           github_app: grafana-flagger-k6-releaser
 
@@ -112,6 +112,7 @@ jobs:
 
             - Updates `appVersion` to `${{ steps.newest-semver-image.outputs.tag }}`
             - Bumps chart `version` from `${{ steps.current.outputs.chart_version }}` to `${{ steps.new-version.outputs.chart_version }}`
+          add-paths: charts/
           branch: auto-release-chart/${{ steps.newest-semver-image.outputs.tag }}
           base: main
           labels: |
