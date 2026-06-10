@@ -10,7 +10,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.68.1
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.24.0
+	github.com/slack-go/slack v0.25.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.9.0
 	k8s.io/api v0.36.1
