@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.7](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.6...v0.5.7) (2026-06-30)
+
+
+### 🔧 Miscellaneous Chores
+
+* **deps:** update actions/setup-go action to v6.5.0 ([#477](https://github.com/grafana/flagger-k6-webhook/issues/477)) ([ed7b0e4](https://github.com/grafana/flagger-k6-webhook/commit/ed7b0e4b390e6d0a5b43c8305427aa0d603d832e))
+* **deps:** update alpine:3.24 docker digest to 28bd5fe ([#460](https://github.com/grafana/flagger-k6-webhook/issues/460)) ([68d306b](https://github.com/grafana/flagger-k6-webhook/commit/68d306bc00524985015d1f0719c195f8a61f7ee6))
+* **deps:** update go-openapi packages to v0.23.2 ([#479](https://github.com/grafana/flagger-k6-webhook/issues/479)) ([f893fd4](https://github.com/grafana/flagger-k6-webhook/commit/f893fd43a80da5a4ad295ab4cf1487143cd8eb91))
+* **deps:** update imjasonh/setup-crane action to v0.7 ([#482](https://github.com/grafana/flagger-k6-webhook/issues/482)) ([83647c6](https://github.com/grafana/flagger-k6-webhook/commit/83647c632282a21b4160a791b555679527276bb1))
+* **deps:** update k8s to 8f3fa49 ([#478](https://github.com/grafana/flagger-k6-webhook/issues/478)) ([7f6b9fa](https://github.com/grafana/flagger-k6-webhook/commit/7f6b9fa7f40b1e91270ab8558285055fb0a841fa))
+* **deps:** update k8s.io/utils digest to be93311 ([#481](https://github.com/grafana/flagger-k6-webhook/issues/481)) ([5769a96](https://github.com/grafana/flagger-k6-webhook/commit/5769a96d23c922ebdff082e38dfca44a3b45e876))
+
 ## [0.5.6](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.5...v0.5.6) (2026-06-25)
 
 
