@@ -1,8 +1,6 @@
 module github.com/grafana/flagger-k6-webhook
 
-go 1.26.0
-
-toolchain go1.26.4
+go 1.26.5
 
 require (
 	github.com/golang/mock v1.6.0
