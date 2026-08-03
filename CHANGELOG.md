@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.8](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.7...v0.5.8) (2026-08-03)
+
+
+### 🐛 Bug Fixes
+
+* **deps:** update module github.com/prometheus/client_golang to v1.24.1 ([#513](https://github.com/grafana/flagger-k6-webhook/issues/513)) ([cd9be36](https://github.com/grafana/flagger-k6-webhook/commit/cd9be36cbb7c86895bed9b4edb4689d4548fda6f))
+* **deps:** update module github.com/prometheus/common to v0.70.0 ([#509](https://github.com/grafana/flagger-k6-webhook/issues/509)) ([37226a6](https://github.com/grafana/flagger-k6-webhook/commit/37226a6c4cc37f7f1d61ff8f493f86ce7ee8b152))
+* **deps:** update module github.com/prometheus/common to v0.70.1 ([#518](https://github.com/grafana/flagger-k6-webhook/issues/518)) ([ff3fc02](https://github.com/grafana/flagger-k6-webhook/commit/ff3fc021d07c520eae1a0e384956546b5e7597db))
+
+
+### 🔧 Miscellaneous Chores
+
+* **deps:** update actions/checkout action to v7.0.1 ([#514](https://github.com/grafana/flagger-k6-webhook/issues/514)) ([c0ff454](https://github.com/grafana/flagger-k6-webhook/commit/c0ff45408706a11afc07ed070d355b2258ac4da0))
+* **deps:** update actions/setup-go action to v7 ([#511](https://github.com/grafana/flagger-k6-webhook/issues/511)) ([5fa908b](https://github.com/grafana/flagger-k6-webhook/commit/5fa908bda49b953f1ebedab233ac1673f9a3686e))
+* **deps:** update docker/login-action action to v4.5.0 ([#519](https://github.com/grafana/flagger-k6-webhook/issues/519)) ([7e876fc](https://github.com/grafana/flagger-k6-webhook/commit/7e876fc5b9cd451943bdf2305de410b7814ae847))
+* **deps:** update docker/login-action action to v4.5.2 ([#520](https://github.com/grafana/flagger-k6-webhook/issues/520)) ([31f1875](https://github.com/grafana/flagger-k6-webhook/commit/31f1875eed0f5ad289f2ab4956c707f4cfe692ef))
+* **deps:** update docker/login-action action to v4.6.0 ([#523](https://github.com/grafana/flagger-k6-webhook/issues/523)) ([0bfb7f8](https://github.com/grafana/flagger-k6-webhook/commit/0bfb7f86e4f05df9979172642b67a74db37a521a))
+* **deps:** update go-openapi packages to v0.27.3 ([#512](https://github.com/grafana/flagger-k6-webhook/issues/512)) ([09a1216](https://github.com/grafana/flagger-k6-webhook/commit/09a1216eb22d8501bd00023f2b5f4bc892131413))
+* **deps:** update go-openapi packages to v1 ([#503](https://github.com/grafana/flagger-k6-webhook/issues/503)) ([3cf78b8](https://github.com/grafana/flagger-k6-webhook/commit/3cf78b87e4a6394f1d2890c92157c872c482d617))
+* **deps:** update golang docker tag to v1.26.5 ([#508](https://github.com/grafana/flagger-k6-webhook/issues/508)) ([57b9a0b](https://github.com/grafana/flagger-k6-webhook/commit/57b9a0b2a104d353f8bde7fdab47b649a0eaef02))
+* **deps:** update grafana/shared-workflows/lint-pr-title action to v1.2.4 ([#516](https://github.com/grafana/flagger-k6-webhook/issues/516)) ([ac6bff1](https://github.com/grafana/flagger-k6-webhook/commit/ac6bff12cc149cb4273b295b87191f7335d5d57a))
+* **deps:** update k8s ([#500](https://github.com/grafana/flagger-k6-webhook/issues/500)) ([44ba799](https://github.com/grafana/flagger-k6-webhook/commit/44ba7996c9fef3d42bb148e190be83d2e73cb462))
+* **deps:** update module github.com/go-logr/logr to v1.4.4 ([#515](https://github.com/grafana/flagger-k6-webhook/issues/515)) ([4285206](https://github.com/grafana/flagger-k6-webhook/commit/428520635eaa1122cf3c2f38577b6e2e3822e3cd))
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.5 ([#521](https://github.com/grafana/flagger-k6-webhook/issues/521)) ([55d15fa](https://github.com/grafana/flagger-k6-webhook/commit/55d15fac8ff1581d7ed2703fba78339607e408d7))
+* **deps:** update module golang.org/x/net to v0.57.0 ([#507](https://github.com/grafana/flagger-k6-webhook/issues/507)) ([194004e](https://github.com/grafana/flagger-k6-webhook/commit/194004e6ad1557a525e8769e8d36915e0d520719))
+* **deps:** update module golang.org/x/text to v0.40.0 ([#506](https://github.com/grafana/flagger-k6-webhook/issues/506)) ([325efaf](https://github.com/grafana/flagger-k6-webhook/commit/325efaf38509da6ecae458a983d1be4ea1430325))
+* **deps:** update module sigs.k8s.io/structured-merge-diff/v6 to v6.4.1 ([#501](https://github.com/grafana/flagger-k6-webhook/issues/501)) ([c3fc275](https://github.com/grafana/flagger-k6-webhook/commit/c3fc2757f84570120dcfb25779c150c50f2accf6))
+* **deps:** update module sigs.k8s.io/structured-merge-diff/v6 to v6.4.2 ([#504](https://github.com/grafana/flagger-k6-webhook/issues/504)) ([94ee26e](https://github.com/grafana/flagger-k6-webhook/commit/94ee26e525a94b4bc5847c37daab7c3805b79671))
+
 ## [0.5.7](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.6...v0.5.7) (2026-07-09)
 
 
