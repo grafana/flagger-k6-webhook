@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.9](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.8...v0.5.9) (2026-08-28)
+
+
+### 🔧 Miscellaneous Chores
+
+* **deps:** update module github.com/go-openapi/jsonreference to v1.0.1 ([#541](https://github.com/grafana/flagger-k6-webhook/issues/541)) ([be2f8a5](https://github.com/grafana/flagger-k6-webhook/commit/be2f8a50e3e35b035a872b829b80ffd784acc531))
+
 ## [0.5.8](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.7...v0.5.8) (2026-08-26)
 
 
