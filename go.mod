@@ -8,7 +8,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/common v0.70.1
+	github.com/prometheus/common v0.71.0
 	github.com/sirupsen/logrus v1.10.1
 	github.com/slack-go/slack v0.29.0
 	github.com/stretchr/testify v1.12.1
