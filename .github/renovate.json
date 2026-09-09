@@ -6,6 +6,11 @@
       "matchPackageNames": [
         "k8s.io/**"
       ]
+    },
+    {
+      "groupName": "Go dependencies",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch", "digest"]
     }
   ]
 }
