@@ -1,0 +1,15 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "packageRules": [
+        {
+            "description": "The tag should stay empty within the Chart values",
+            "matchFileNames": [
+                "charts/k6-loadtester/values.yaml"
+            ],
+            "matchDepNames": [
+                "ghcr.io/grafana/flagger-k6-webhook"
+            ],
+            "enabled": false
+        }
+    ]
+}
