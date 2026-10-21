@@ -2,6 +2,9 @@ FROM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f
 
 ARG GO_LDFLAGS
 
+RUN apk add --no-cache 'ca-certificates>=20261020-r0' \
+    && update-ca-certificates
+
 RUN mkdir /app
 WORKDIR /app
 COPY . /app/
