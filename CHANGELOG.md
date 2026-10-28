@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.10](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.9...v0.5.10) (2026-10-28)
+
+
+### 🐛 Bug Fixes
+
+* **security/unknown/:** update module golang.org/x/net to v0.62.0 [security] ([#602](https://github.com/grafana/flagger-k6-webhook/issues/602)) ([9869b7d](https://github.com/grafana/flagger-k6-webhook/commit/9869b7df190326e996e197c5198101309924627e))
+
+
+### 🔧 Miscellaneous Chores
+
+* release chart for v0.5.9 ([#598](https://github.com/grafana/flagger-k6-webhook/issues/598)) ([736eda2](https://github.com/grafana/flagger-k6-webhook/commit/736eda2eadf3ea566ca7da8ee7412b00540466f0))
+
 ## [0.5.9](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.8...v0.5.9) (2026-10-27)
 
 
