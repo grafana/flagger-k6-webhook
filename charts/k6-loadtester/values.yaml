@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/grafana/flagger-k6-webhook
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "@sha256:d5095a2203ab82f3d6f905aea4ccd501533de4abed12180ee59971996251d24a"
 
 # accepted values are debug, info, warning, error (defaults to info)
 logLevel: debug
