@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.10](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.9...v0.5.10) (2026-11-11)
+
+
+### 🐛 Bug Fixes
+
+* **security/unknown/:** update go toolchain directive to v1.27.4 [security] ([#613](https://github.com/grafana/flagger-k6-webhook/issues/613)) ([00c9feb](https://github.com/grafana/flagger-k6-webhook/commit/00c9febfdbb41eaca8ce7a4bc17f0f2d4ca21b71))
+* **security/unknown/:** update module golang.org/x/net to v0.62.0 [security] ([#602](https://github.com/grafana/flagger-k6-webhook/issues/602)) ([9869b7d](https://github.com/grafana/flagger-k6-webhook/commit/9869b7df190326e996e197c5198101309924627e))
+
+
+### 🔧 Miscellaneous Chores
+
+* **deps:** update alpine:3.24 docker digest to f59abe6 [security] ([#610](https://github.com/grafana/flagger-k6-webhook/issues/610)) ([a004e29](https://github.com/grafana/flagger-k6-webhook/commit/a004e29cdb99637d4aa85b5d3328d414b774e08a))
+* **deps:** update ca trust base images [security] ([#608](https://github.com/grafana/flagger-k6-webhook/issues/608)) ([2cbb50a](https://github.com/grafana/flagger-k6-webhook/commit/2cbb50a2ac38c23cf39f1b2ee3aaae90542d0e0d))
+* **deps:** update ca trust base images [security] ([#609](https://github.com/grafana/flagger-k6-webhook/issues/609)) ([683348b](https://github.com/grafana/flagger-k6-webhook/commit/683348bb02b0c101b6e5cba1ab35c4bbe79a5c9f))
+* **deps:** update golang docker tag to v1.27.4 [security] ([#612](https://github.com/grafana/flagger-k6-webhook/issues/612)) ([f45e52a](https://github.com/grafana/flagger-k6-webhook/commit/f45e52ab368c1b30adaccd67dc856e91f7cfb77f))
+* release chart for v0.5.9 ([#598](https://github.com/grafana/flagger-k6-webhook/issues/598)) ([736eda2](https://github.com/grafana/flagger-k6-webhook/commit/736eda2eadf3ea566ca7da8ee7412b00540466f0))
+
 ## [0.5.9](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.8...v0.5.9) (2026-10-27)
 
 
