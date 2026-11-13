@@ -8,7 +8,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.25.0
-	github.com/prometheus/common v0.72.1
+	github.com/prometheus/common v0.73.1
 	github.com/sirupsen/logrus v1.10.2
 	github.com/slack-go/slack v0.30.1
 	github.com/stretchr/testify v1.12.1
@@ -45,6 +45,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pandatix/go-abnf v0.5.3 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
