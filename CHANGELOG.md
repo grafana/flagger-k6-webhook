@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.11](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.10...v0.5.11) (2026-11-25)
+
+
+### 🔧 Miscellaneous Chores
+
+* **deps:** update actions/setup-go action to v7.1.0 ([#618](https://github.com/grafana/flagger-k6-webhook/issues/618)) ([bf25a5d](https://github.com/grafana/flagger-k6-webhook/commit/bf25a5d97308c775875b29c6bd358a8a781ea2f9))
+* **deps:** update docker/login-action action to v4.8.0 ([#611](https://github.com/grafana/flagger-k6-webhook/issues/611)) ([04c660e](https://github.com/grafana/flagger-k6-webhook/commit/04c660ec53843402e5180b58d8f5520f0d3b3a30))
+* **deps:** update grafana/shared-workflows/create-github-app-token action to v1.0 ([#566](https://github.com/grafana/flagger-k6-webhook/issues/566)) ([1356676](https://github.com/grafana/flagger-k6-webhook/commit/13566766d5d42df035e78f31beedaac171129329))
+* **deps:** update helm/chart-releaser-action action to v1.9.0 ([#614](https://github.com/grafana/flagger-k6-webhook/issues/614)) ([88283c3](https://github.com/grafana/flagger-k6-webhook/commit/88283c34e78468f870eac3d5b0adc679ad4aa1f3))
+* **deps:** update peter-evans/create-pull-request action to v8.1.3 ([#615](https://github.com/grafana/flagger-k6-webhook/issues/615)) ([72806a5](https://github.com/grafana/flagger-k6-webhook/commit/72806a5fc47806f8ae5519f9cf5d5cd31a8f49c5))
+
 ## [0.5.10](https://github.com/grafana/flagger-k6-webhook/compare/v0.5.9...v0.5.10) (2026-11-24)
 
 
